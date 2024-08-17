@@ -105,13 +105,12 @@ const platformServices = {
 
 Object.keys(platformServices).forEach(platform => {
   bot.action(platform, async (ctx) => {
-    const services = platformServices[platform];
     await ctx.reply('Select the service:', {
       reply_markup: {
         inline_keyboard: [
-          [{ text: 'Followers', callback_data: `${platform}_followers` }],
-          [{ text: 'Likes', callback_data: `${platform}_likes` }],
-          [{ text: 'Comments', callback_data: `${platform}_comments` }]
+          [{ text: '👍 Followers', callback_data: `${platform}_followers` }],
+          [{ text: '❤️ Likes', callback_data: `${platform}_likes` }],
+          [{ text: '💬 Comments', callback_data: `${platform}_comments` }]
         ]
       }
     });
@@ -146,8 +145,6 @@ bot.on('text', async (ctx) => {
     try {
       // Simulating service selection here
       const selectedService = parseInt(userText, 10);
-      // Assuming you have the service details stored in a variable
-      const serviceInfo = "Service Info Here"; // Replace with actual service info
 
       await ctx.reply(`You selected service #${selectedService}.\nPlease enter the amount:`);
       
@@ -162,7 +159,7 @@ bot.on('text', async (ctx) => {
           await ctx.reply(`You provided the link: ${link}. Confirm your order.`, {
             reply_markup: {
               inline_keyboard: [
-                [{ text: 'Confirm Order', callback_data: 'confirm_order' }]
+                [{ text: '✅ Confirm Order', callback_data: 'confirm_order' }]
               ]
             }
           });
@@ -170,7 +167,15 @@ bot.on('text', async (ctx) => {
           bot.action('confirm_order', async (ctx) => {
             try {
               // Call your API to process the order here
-              // e.g., await axios.post('API_ENDPOINT', { serviceId: selectedService, amount, link });
+              await ctx.reply('🚀 Processing your order...');
+
+              // Example API call
+              await axios.post(`${apiBaseURL}/order`, {
+                service: selectedService,
+                amount,
+                link,
+                key: apiKey
+              });
 
               await ctx.reply('✅ Your order has been placed successfully!');
             } catch (err) {
@@ -197,13 +202,13 @@ bot.hears('📞 Support', (ctx) => {
 // FAQ button logic
 bot.hears('❓ FAQ', (ctx) => {
   ctx.reply(`❓ Frequently Asked Questions:
-1. How do I place an order?
-2. What payment methods do you accept?
-3. How long does it take to deliver?
-4. What is the refund policy?
-5. How do I contact support?
+1. 📝 How do I place an order?
+2. 💳 What payment methods do you accept?
+3. ⏱️ How long does it take to deliver?
+4. 💵 What is the refund policy?
+5. 📞 How do I contact support?
 
-Please select the FAQ by its number:`);
+👇 Please select the FAQ by its number:`);
 });
 
 bot.on('text', async (ctx) => {

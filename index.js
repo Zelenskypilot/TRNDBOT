@@ -1,213 +1,187 @@
 require('dotenv').config();
-const TelegramBot = require('node-telegram-bot-api');
+const { Telegraf } = require('telegraf');
 const axios = require('axios');
-const http = require('http');
 
-// Telegram Bot setup
-const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const bot = new TelegramBot(TELEGRAM_BOT_TOKEN, { polling: true });
+const bot = new Telegraf(process.env.BOT_TOKEN);
+const apiKey = process.env.API_KEY;
+const channelID = '@trendifysmmtelebot'; // Your channel ID
+const apiBaseURL = 'https://trendifysmm.com/api/v2';
 
-const API_KEY = 'xHevD2QoIiR6hiwO5SKyHsxFivrKYScHHlsQjySNnF1KDkI2laCFpxBJ0WAF';
-const API_BASE_URL = 'https://trendifysmm.com/api/v2';
-
-const CHANNEL_ID = '@trendifysmmtelebot';
-
-let userState = {};
-
-// Check if a user is a member of a channel
-async function checkMembership(userId) {
-    const member = await bot.getChatMember(CHANNEL_ID, userId);
-    return member.status === 'member' || member.status === 'administrator' || member.status === 'creator';
-}
-
-// Start command
-bot.onText(/\/start/, async (msg) => {
-    const chatId = msg.chat.id;
-    const userId = msg.from.id;
-
-    const isMember = await checkMembership(userId);
-
-    if (!isMember) {
-        bot.sendMessage(chatId, '🚨 You need to join our channel to use this bot.', {
-            reply_markup: {
-                inline_keyboard: [
-                    [{ text: 'Join Our Channel', url: 'https://t.me/trendifysmmtelebot' }],
-                    [{ text: 'Confirm Join', callback_data: 'confirm_join' }]
-                ]
-            }
-        });
-    } else {
-        showMainMenu(chatId);
-    }
-});
-
-// Handle callback queries
-bot.on('callback_query', async (callbackQuery) => {
-    const chatId = callbackQuery.message.chat.id;
-    const userId = callbackQuery.from.id;
-
-    if (callbackQuery.data === 'confirm_join') {
-        const isMember = await checkMembership(userId);
-
-        if (isMember) {
-            bot.sendMessage(chatId, '✅ Thank you for subscribing! You can now use the bot.');
-            showMainMenu(chatId);
-        } else {
-            bot.sendMessage(chatId, '❌ You need to join our channel to use this bot.');
-        }
-    }
-});
-
-function showMainMenu(chatId) {
-    const opts = {
+bot.start(async (ctx) => {
+  try {
+    await ctx.reply(
+      '🎉 Welcome to the Trendifysmm SMM Panel Bot! To use this bot, you must first join our channel.',
+      {
         reply_markup: {
-            keyboard: [
-                [{ text: '🆕 New Order' }],
-                [{ text: '💰 Wallet' }],
-                [{ text: '❓ FAQ' }, { text: '🆘 Help' }]
+          inline_keyboard: [
+            [
+              {
+                text: 'Join our channel',
+                url: `https://t.me/${channelID}`
+              },
             ],
-            resize_keyboard: true,
-            one_time_keyboard: true,
-        },
-    };
-    bot.sendMessage(chatId, 'Welcome to Trendifysmm Panel! What would you like to do?', opts);
-}
-
-// Handle text messages
-bot.on('message', async (msg) => {
-    const chatId = msg.chat.id;
-    const text = msg.text.trim();
-
-    if (text === '🆕 New Order') {
-        showSocialMediaOptions(chatId);
-    } else if (userState[chatId] && userState[chatId].step === 'select_platform') {
-        handlePlatformSelection(chatId, text);
-    } else if (userState[chatId] && userState[chatId].step === 'select_service') {
-        handleServiceSelection(chatId, text);
-    } else if (userState[chatId] && userState[chatId].step === 'enter_quantity') {
-        handleQuantityEntry(chatId, text);
-    }
-});
-
-function showSocialMediaOptions(chatId) {
-    userState[chatId] = { step: 'select_platform' };
-    const opts = {
-        reply_markup: {
-            inline_keyboard: [
-                [{ text: 'Instagram', callback_data: 'instagram' }],
-                [{ text: 'Facebook', callback_data: 'facebook' }],
-                [{ text: 'TikTok', callback_data: 'tiktok' }],
-                [{ text: 'Twitter', callback_data: 'twitter' }]
+            [
+              {
+                text: 'Confirm join',
+                callback_data: 'confirm_join'
+              }
             ]
+          ]
         }
-    };
-    bot.sendMessage(chatId, 'Please choose a social media platform:', opts);
-}
-
-function handlePlatformSelection(chatId, platform) {
-    const platformMap = {
-        instagram: 'Instagram',
-        facebook: 'Facebook',
-        tiktok: 'TikTok',
-        twitter: 'Twitter'
-    };
-
-    if (platformMap[platform.toLowerCase()]) {
-        userState[chatId].platform = platformMap[platform.toLowerCase()];
-        userState[chatId].step = 'select_service';
-
-        const opts = {
-            reply_markup: {
-                inline_keyboard: [
-                    [{ text: 'Followers', callback_data: 'followers' }],
-                    [{ text: 'Likes', callback_data: 'likes' }],
-                    [{ text: 'Comments', callback_data: 'comments' }],
-                ]
-            }
-        };
-
-        if (platform.toLowerCase() === 'twitter') {
-            opts.reply_markup.inline_keyboard.push([{ text: 'Retweets', callback_data: 'retweets' }]);
-        }
-
-        if (platform.toLowerCase() === 'facebook') {
-            opts.reply_markup.inline_keyboard = [
-                [{ text: 'Profile Followers', callback_data: 'profile_followers' }],
-                [{ text: 'Page Followers', callback_data: 'page_followers' }],
-                [{ text: 'Likes', callback_data: 'likes' }],
-                [{ text: 'Comments', callback_data: 'comments' }]
-            ];
-        }
-
-        bot.sendMessage(chatId, `You chose ${userState[chatId].platform}. Now, please select the service:`, opts);
-    } else {
-        bot.sendMessage(chatId, 'Invalid platform. Please select again.');
-        showSocialMediaOptions(chatId);
-    }
-}
-
-function handleServiceSelection(chatId, service) {
-    const serviceMap = {
-        followers: 'Followers',
-        likes: 'Likes',
-        comments: 'Comments',
-        retweets: 'Retweets',
-        profile_followers: 'Profile Followers',
-        page_followers: 'Page Followers'
-    };
-
-    if (serviceMap[service.toLowerCase()]) {
-        userState[chatId].service = serviceMap[service.toLowerCase()];
-        userState[chatId].step = 'enter_quantity';
-
-        bot.sendMessage(chatId, `You selected ${userState[chatId].service}. Please enter the quantity:`);
-    } else {
-        bot.sendMessage(chatId, 'Invalid service. Please select again.');
-        handlePlatformSelection(chatId, userState[chatId].platform);
-    }
-}
-
-async function handleQuantityEntry(chatId, quantity) {
-    if (!isNaN(quantity)) {
-        userState[chatId].quantity = parseInt(quantity, 10);
-
-        const serviceDetails = await getServiceDetails(userState[chatId].platform, userState[chatId].service);
-        const pricePerUnit = serviceDetails.rate / 1000;
-        const totalPrice = pricePerUnit * userState[chatId].quantity;
-
-        bot.sendMessage(chatId, `🔥 Create a new order!
-    └📦 Quantity: ${userState[chatId].quantity}
-
-🗄️ Category: ${userState[chatId].platform}
-🗃️ Subcategory: ${serviceDetails.category}
-🧾 Service: ${serviceDetails.name}
-💵 Price: ${pricePerUnit}$ per unit
-
-👇 Total Cost: ${totalPrice}$`);
-
-        // Now, you would proceed to place the order using the API
-        // Example: createOrder(chatId, serviceDetails.service, userState[chatId].quantity);
-    } else {
-        bot.sendMessage(chatId, 'Invalid quantity. Please enter a valid number:');
-    }
-}
-
-// Helper to fetch service details (for now, it's a placeholder)
-async function getServiceDetails(platform, service) {
-    // Placeholder - Replace with actual API call to fetch service details
-    return {
-        service: 1,
-        name: service,
-        category: `${platform} Services`,
-        rate: 100 // Example rate
-    };
-}
-
-// HTTP server setup to keep the bot running on Render
-const port = process.env.PORT || 3000;
-http.createServer((req, res) => {
-    res.writeHead(200, { 'Content-Type': 'text/plain' });
-    res.end('Bot is running...\n');
-}).listen(port, () => {
-    console.log(`Server is listening on port ${port}`);
+      }
+    );
+  } catch (err) {
+    console.error(err);
+  }
 });
+
+bot.action('confirm_join', async (ctx) => {
+  try {
+    const chatMember = await bot.telegram.getChatMember(channelID, ctx.from.id);
+    if (chatMember.status === 'member' || chatMember.status === 'administrator' || chatMember.status === 'creator') {
+      await ctx.reply('Thank you for joining our channel! How can I assist you today?', {
+        reply_markup: {
+          keyboard: [
+            ['New Order', 'Wallet'],
+            ['FAQ', 'Help'],
+          ],
+          resize_keyboard: true,
+          one_time_keyboard: true,
+        }
+      });
+    } else {
+      await ctx.reply('🚫 You must join our channel to use this bot.');
+    }
+  } catch (err) {
+    console.error(err);
+    await ctx.reply('❌ There was an error while checking your subscription status.');
+  }
+});
+
+bot.hears('New Order', (ctx) => {
+  ctx.reply('Please choose a platform:', {
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: 'Instagram', callback_data: 'instagram' }],
+        [{ text: 'Facebook', callback_data: 'facebook' }],
+        [{ text: 'TikTok', callback_data: 'tiktok' }],
+      ]
+    }
+  });
+});
+
+bot.action('instagram', (ctx) => {
+  ctx.reply('Choose a service for Instagram:', {
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: 'Followers', callback_data: 'insta_followers' }],
+        [{ text: 'Likes', callback_data: 'insta_likes' }],
+        [{ text: 'Comments', callback_data: 'insta_comments' }],
+        [{ text: 'Back', callback_data: 'new_order' }],
+      ]
+    }
+  });
+});
+
+// Instagram service actions
+const instagramServices = {
+  insta_followers: [6443, 7128, 5333, 5341],
+  insta_likes: [6828, 6827],
+  insta_comments: [5457, 5458, 5459]
+};
+
+Object.keys(instagramServices).forEach(service => {
+  bot.action(service, async (ctx) => {
+    const serviceIDs = instagramServices[service];
+    try {
+      const { data: services } = await axios.get(`${apiBaseURL}?action=services&key=${apiKey}`);
+      const serviceDetails = services.filter(s => serviceIDs.includes(s.service));
+      const serviceInfo = serviceDetails.map(s => 
+        `📦 Service: ${s.name}\n🗄️ Category: ${s.category}\n💵 Price: ${s.rate}$ per 1000\n`).join('\n');
+      
+      await ctx.reply(`🔥 Available Services:\n${serviceInfo}\n👇 Enter the order quantity:`);
+    } catch (err) {
+      console.error(err);
+      ctx.reply('❌ Failed to retrieve services.');
+    }
+  });
+});
+
+// TikTok service actions
+const tiktokServices = {
+  tiktok_followers: [6784, 6785, 6786],
+  tiktok_views: [5639, 5634, 5635, 5637],
+  tiktok_likes: [5612, 5611, 5610]
+};
+
+Object.keys(tiktokServices).forEach(service => {
+  bot.action(service, async (ctx) => {
+    const serviceIDs = tiktokServices[service];
+    try {
+      const { data: services } = await axios.get(`${apiBaseURL}?action=services&key=${apiKey}`);
+      const serviceDetails = services.filter(s => serviceIDs.includes(s.service));
+      const serviceInfo = serviceDetails.map(s => 
+        `📦 Service: ${s.name}\n🗄️ Category: ${s.category}\n💵 Price: ${s.rate}$ per 1000\n`).join('\n');
+      
+      await ctx.reply(`🔥 Available Services:\n${serviceInfo}\n👇 Enter the order quantity:`);
+    } catch (err) {
+      console.error(err);
+      ctx.reply('❌ Failed to retrieve services.');
+    }
+  });
+});
+
+// Facebook service actions
+const facebookServices = {
+  fb_profile_followers: [7215],
+  fb_page_followers: [6793, 7221],
+  fb_likes: [6159, 6160, 6153]
+};
+
+Object.keys(facebookServices).forEach(service => {
+  bot.action(service, async (ctx) => {
+    const serviceIDs = facebookServices[service];
+    try {
+      const { data: services } = await axios.get(`${apiBaseURL}?action=services&key=${apiKey}`);
+      const serviceDetails = services.filter(s => serviceIDs.includes(s.service));
+      const serviceInfo = serviceDetails.map(s => 
+        `📦 Service: ${s.name}\n🗄️ Category: ${s.category}\n💵 Price: ${s.rate}$ per 1000\n`).join('\n');
+      
+      await ctx.reply(`🔥 Available Services:\n${serviceInfo}\n👇 Enter the order quantity:`);
+    } catch (err) {
+      console.error(err);
+      ctx.reply('❌ Failed to retrieve services.');
+    }
+  });
+});
+
+bot.hears('Back', (ctx) => {
+  ctx.reply('Please choose a platform:', {
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: 'Instagram', callback_data: 'instagram' }],
+        [{ text: 'Facebook', callback_data: 'facebook' }],
+        [{ text: 'TikTok', callback_data: 'tiktok' }],
+      ]
+    }
+  });
+});
+
+// Handling wallet, FAQ, and help commands
+bot.hears('Wallet', (ctx) => {
+  ctx.reply('🔍 Checking your balance...');
+  // Handle wallet logic here
+});
+
+bot.hears('FAQ', (ctx) => {
+  ctx.reply('❓ Frequently Asked Questions');
+  // Handle FAQ logic here
+});
+
+bot.hears('Help', (ctx) => {
+  ctx.reply('🆘 How can I assist you?');
+  // Handle help logic here
+});
+
+bot.launch();
+console.log('Bot is running...');

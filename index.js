@@ -30,7 +30,7 @@ bot.start(async (ctx) => {
             [
               {
                 text: 'Join our channel',
-                url: `https://t.me/${process.env.CHANNEL_USERNAME}`
+                url: 'https://t.me/trendifysmmtelebot'
               },
             ],
             [
@@ -50,7 +50,7 @@ bot.start(async (ctx) => {
 
 bot.action('confirm_join', async (ctx) => {
   try {
-    const chatMember = await bot.telegram.getChatMember(`@${process.env.CHANNEL_USERNAME}`, ctx.from.id);
+    const chatMember = await bot.telegram.getChatMember('@trendifysmmtelebot', ctx.from.id);
     if (chatMember.status === 'member' || chatMember.status === 'administrator' || chatMember.status === 'creator') {
       await ctx.reply('Thank you for joining our channel! How can I assist you today?', {
         reply_markup: {

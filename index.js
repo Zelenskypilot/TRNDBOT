@@ -1,14 +1,12 @@
 require('dotenv').config();
 const express = require('express');
-const { Telegraf, Markup } = require('telegraf');
+const { Telegraf } = require('telegraf');
 const axios = require('axios');
-const FontAwesome = require('@fortawesome/fontawesome-free');
-
 const app = express();
 const PORT = process.env.PORT || 3000;
 const bot = new Telegraf(process.env.BOT_TOKEN);
 const apiKey = process.env.API_KEY;
-const channelUsername = 'trendifysmmtelebot'; // Replace with your actual channel username (without @)
+const channelUsername = 'trendifysmmtelebot';
 const apiBaseURL = 'https://trendifysmm.com/api/v2';
 
 // Basic Express route to keep the app alive
@@ -31,13 +29,13 @@ bot.start(async (ctx) => {
           inline_keyboard: [
             [
               {
-                text: 'Join our channel',
+                text: '📲 Join our channel',
                 url: `https://t.me/${channelUsername}`
               },
             ],
             [
               {
-                text: 'Confirm join',
+                text: '✅ Confirm join',
                 callback_data: 'confirm_join'
               }
             ]
@@ -53,14 +51,16 @@ bot.start(async (ctx) => {
 bot.action('confirm_join', async (ctx) => {
   try {
     const chatMember = await bot.telegram.getChatMember(`@${channelUsername}`, ctx.from.id);
-    if (chatMember.status === 'member' || chatMember.status === 'administrator' || chatMember.status === 'creator') {
-      await ctx.reply('Thank you for joining our channel! How can I assist you today?', {
-        reply_markup: Markup.keyboard([
-          ['💼 New Order', '💰 Wallet'],
-          ['❓ FAQ', '🆘 Support'],
-        ])
-        .resize()
-        .oneTime()
+    if (['member', 'administrator', 'creator'].includes(chatMember.status)) {
+      await ctx.reply('🎉 Thank you for joining our channel! How can I assist you today?', {
+        reply_markup: {
+          keyboard: [
+            ['🛒 New Order', '💰 Wallet'],
+            ['❓ FAQ', '📞 Support'],
+          ],
+          resize_keyboard: true,
+          one_time_keyboard: true,
+        }
       });
     } else {
       await ctx.reply('🚫 You must join our channel to use this bot.');
@@ -71,13 +71,15 @@ bot.action('confirm_join', async (ctx) => {
   }
 });
 
-bot.hears('💼 New Order', (ctx) => {
+bot.hears('🛒 New Order', (ctx) => {
   ctx.reply('Please choose a platform:', {
-    reply_markup: Markup.inlineKeyboard([
-      [Markup.button.callback(`${FontAwesome.icon('fa-instagram').html()} Instagram`, 'instagram')],
-      [Markup.button.callback(`${FontAwesome.icon('fa-facebook').html()} Facebook`, 'facebook')],
-      [Markup.button.callback(`${FontAwesome.icon('fa-tiktok').html()} TikTok`, 'tiktok')],
-    ])
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: '📸 Instagram', callback_data: 'instagram' }],
+        [{ text: '📘 Facebook', callback_data: 'facebook' }],
+        [{ text: '🎵 TikTok', callback_data: 'tiktok' }],
+      ]
+    }
   });
 });
 
@@ -153,28 +155,60 @@ Object.keys(facebookServices).forEach(service => {
   });
 });
 
-bot.hears('Back', (ctx) => {
-  ctx.reply('Please choose a platform:', {
-    reply_markup: Markup.inlineKeyboard([
-      [Markup.button.callback(`${FontAwesome.icon('fa-instagram').html()} Instagram`, 'instagram')],
-      [Markup.button.callback(`${FontAwesome.icon('fa-facebook').html()} Facebook`, 'facebook')],
-      [Markup.button.callback(`${FontAwesome.icon('fa-tiktok').html()} TikTok`, 'tiktok')],
-    ])
-  });
-});
-
-// Handling wallet, FAQ, and support commands
 bot.hears('💰 Wallet', (ctx) => {
   ctx.reply('🔍 Checking your balance...');
   // Handle wallet logic here
 });
 
 bot.hears('❓ FAQ', (ctx) => {
-  ctx.reply('❓ Frequently Asked Questions:\n1. How do I place an order?\n2. What payment methods do you accept?\n3. How long does it take to deliver?\n4. What is the refund policy?\n5. How do I contact support?');
+  ctx.reply(
+    '❓ Frequently Asked Questions:\n' +
+    '1. How do I place an order?\n' +
+    '2. What payment methods do you accept?\n' +
+    '3. How long does it take to deliver?\n' +
+    '4. What is the refund policy?\n' +
+    '5. How do I contact support?'
+  );
 });
 
-bot.hears('🆘 Support', (ctx) => {
-  ctx.reply('🆘 How can I assist you? Contact support via:\n📱 WhatsApp: https://wa.me/message/OV5BS7MPRIMRO1\n📞 Call: +255747437093');
+bot.on('text', (ctx) => {
+  const faqNumber = parseInt(ctx.message.text.trim());
+  let response;
+
+  switch (faqNumber) {
+    case 1:
+      response = 'To place an order, select a platform, then choose the service, and finally enter the quantity and link.';
+      break;
+    case 2:
+      response = 'We accept various payment methods including PayPal, credit cards, and cryptocurrencies.';
+      break;
+    case 3:
+      response = 'Delivery time depends on the service you choose. It can range from a few minutes to a few days.';
+      break;
+    case 4:
+      response = 'Refunds are available if the order was not completed or there was an issue with the delivery.';
+      break;
+    case 5:
+      response = 'You can contact support through WhatsApp or by calling the support number.';
+      break;
+    default:
+      response = 'Please enter a valid FAQ number.';
+  }
+
+  if (response) {
+    ctx.reply(response);
+  }
+});
+
+bot.hears('📞 Support', (ctx) => {
+  ctx.reply('🆘 How can I assist you?', {
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: '💬 WhatsApp Support', url: 'https://wa.me/message/OV5BS7MPRIMRO1' }],
+        [{ text: '📞 Call Support', url: 'tel:+255747437093' }]
+      ]
+    }
+  });
 });
 
 bot.launch();

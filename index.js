@@ -75,84 +75,33 @@ bot.hears('🛒 New Order', (ctx) => {
   ctx.reply('Please choose a platform:', {
     reply_markup: {
       inline_keyboard: [
-        [{ text: '📸 Instagram', callback_data: 'instagram' }],
-        [{ text: '📘 Facebook', callback_data: 'facebook' }],
-        [{ text: '🎵 TikTok', callback_data: 'tiktok' }],
+        [{ text: 'Instagram', callback_data: 'instagram' }],
+        [{ text: 'TikTok', callback_data: 'tiktok' }],
+        [{ text: 'Facebook', callback_data: 'facebook' }],
       ]
     }
   });
 });
 
-// Instagram service actions
-const instagramServices = {
-  insta_followers: [6443, 7128, 5333, 5341],
-  insta_likes: [6828, 6827],
-  insta_comments: [5457, 5458, 5459]
+const handlePlatformServices = async (ctx, platformServices) => {
+  const { data: services } = await axios.get(`${apiBaseURL}?action=services&key=${apiKey}`);
+  const serviceDetails = services.filter(s => platformServices.includes(s.service));
+  const serviceInfo = serviceDetails.map(s => 
+    `📦 Service: ${s.name}\n🗄️ Category: ${s.category}\n💵 Price: ${s.rate}$ per 1000\n`).join('\n');
+  
+  await ctx.reply(`🔥 Available Services:\n${serviceInfo}\n👇 Enter the order quantity:`);
 };
 
-Object.keys(instagramServices).forEach(service => {
-  bot.action(service, async (ctx) => {
-    const serviceIDs = instagramServices[service];
-    try {
-      const { data: services } = await axios.get(`${apiBaseURL}?action=services&key=${apiKey}`);
-      const serviceDetails = services.filter(s => serviceIDs.includes(s.service));
-      const serviceInfo = serviceDetails.map(s => 
-        `📦 Service: ${s.name}\n🗄️ Category: ${s.category}\n💵 Price: ${s.rate}$ per 1000\n`).join('\n');
-      
-      await ctx.reply(`🔥 Available Services:\n${serviceInfo}\n👇 Enter the order quantity:`);
-    } catch (err) {
-      console.error(err);
-      ctx.reply('❌ Failed to retrieve services.');
-    }
-  });
+bot.action('instagram', (ctx) => {
+  handlePlatformServices(ctx, [6443, 7128, 5333, 5341, 6828, 6827, 5457, 5458, 5459]);
 });
 
-// TikTok service actions
-const tiktokServices = {
-  tiktok_followers: [6784, 6785, 6786],
-  tiktok_views: [5639, 5634, 5635, 5637],
-  tiktok_likes: [5612, 5611, 5610]
-};
-
-Object.keys(tiktokServices).forEach(service => {
-  bot.action(service, async (ctx) => {
-    const serviceIDs = tiktokServices[service];
-    try {
-      const { data: services } = await axios.get(`${apiBaseURL}?action=services&key=${apiKey}`);
-      const serviceDetails = services.filter(s => serviceIDs.includes(s.service));
-      const serviceInfo = serviceDetails.map(s => 
-        `📦 Service: ${s.name}\n🗄️ Category: ${s.category}\n💵 Price: ${s.rate}$ per 1000\n`).join('\n');
-      
-      await ctx.reply(`🔥 Available Services:\n${serviceInfo}\n👇 Enter the order quantity:`);
-    } catch (err) {
-      console.error(err);
-      ctx.reply('❌ Failed to retrieve services.');
-    }
-  });
+bot.action('tiktok', (ctx) => {
+  handlePlatformServices(ctx, [6784, 6785, 6786, 5639, 5634, 5635, 5637, 5612, 5611, 5610]);
 });
 
-// Facebook service actions
-const facebookServices = {
-  fb_profile_followers: [7215],
-  fb_page_followers: [6793, 7221],
-  fb_likes: [6159, 6160, 6153]
-};
-
-Object.keys(facebookServices).forEach(service => {
-  bot.action(service, async (ctx) => {
-    const serviceIDs = facebookServices[service];
-    try {
-      const { data: services } = await axios.get(`${apiBaseURL}?action=services&key=${apiKey}`);
-      const serviceDetails = services.filter(s => serviceIDs.includes(s.service));
-      const serviceInfo = serviceDetails.map(s => 
-        `📦 Service: ${s.name}\n🗄️ Category: ${s.category}\n💵 Price: ${s.rate}$ per 1000\n`).join('\n');
-      
-      await ctx.reply(`🔥 Available Services:\n${serviceInfo}\n👇 Enter the order quantity:`);
-    } catch (err) {
-      console.error(err);
-      ctx.reply('❌ Failed to retrieve services.');
-    }
-  });
+bot.action('facebook', (ctx) => {
+  handlePlatformServices(ctx, [7215, 6793, 7221, 6159, 6160, 6153]);
 });
 
 bot.hears('💰 Wallet', (ctx) => {
@@ -162,12 +111,13 @@ bot.hears('💰 Wallet', (ctx) => {
 
 bot.hears('❓ FAQ', (ctx) => {
   ctx.reply(
-    '❓ Frequently Asked Questions:\n' +
+    '❓ Frequently Asked Questions:\n\n' +
     '1. How do I place an order?\n' +
     '2. What payment methods do you accept?\n' +
     '3. How long does it take to deliver?\n' +
     '4. What is the refund policy?\n' +
-    '5. How do I contact support?'
+    '5. How do I contact support?\n\n' +
+    'Please select the number of the FAQ you want an answer to.'
   );
 });
 
@@ -192,7 +142,7 @@ bot.on('text', (ctx) => {
       response = 'You can contact support through WhatsApp or by calling the support number.';
       break;
     default:
-      response = 'Please enter a valid FAQ number.';
+      response = '⚠️ Please enter a valid FAQ number (1-5).';
   }
 
   if (response) {

@@ -2,24 +2,22 @@ require('dotenv').config();
 const express = require('express');
 const { Telegraf } = require('telegraf');
 const axios = require('axios');
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 const bot = new Telegraf(process.env.BOT_TOKEN);
 const apiKey = process.env.API_KEY;
-const channelUsername = 'trendifysmmtelebot';
+const channelUsername = 'trendifysmmtelebot'; // Replace with your actual channel username (without @)
 const apiBaseURL = 'https://trendifysmm.com/api/v2';
 
-// Basic Express route to keep the app alive
 app.get('/', (req, res) => {
   res.send('Trendifysmm Bot is running...');
 });
 
-// Listen to the specified port
 app.listen(PORT, () => {
   console.log(`HTTPS server is running on port ${PORT}`);
 });
 
-// Telegram bot logic
 bot.start(async (ctx) => {
   try {
     await ctx.reply(
@@ -27,18 +25,8 @@ bot.start(async (ctx) => {
       {
         reply_markup: {
           inline_keyboard: [
-            [
-              {
-                text: '📲 Join our channel',
-                url: `https://t.me/${channelUsername}`
-              },
-            ],
-            [
-              {
-                text: '✅ Confirm join',
-                callback_data: 'confirm_join'
-              }
-            ]
+            [{ text: 'Join our channel', url: `https://t.me/${channelUsername}` }],
+            [{ text: 'Confirm join', callback_data: 'confirm_join' }]
           ]
         }
       }
@@ -51,15 +39,15 @@ bot.start(async (ctx) => {
 bot.action('confirm_join', async (ctx) => {
   try {
     const chatMember = await bot.telegram.getChatMember(`@${channelUsername}`, ctx.from.id);
-    if (['member', 'administrator', 'creator'].includes(chatMember.status)) {
-      await ctx.reply('🎉 Thank you for joining our channel! How can I assist you today?', {
+    if (chatMember.status === 'member' || chatMember.status === 'administrator' || chatMember.status === 'creator') {
+      await ctx.reply('Thank you for joining our channel! How can I assist you today?', {
         reply_markup: {
           keyboard: [
-            ['🛒 New Order', '💰 Wallet'],
-            ['❓ FAQ', '📞 Support'],
+            ['New Order', 'Wallet'],
+            ['FAQ', 'Support']
           ],
           resize_keyboard: true,
-          one_time_keyboard: true,
+          one_time_keyboard: true
         }
       });
     } else {
@@ -71,94 +59,155 @@ bot.action('confirm_join', async (ctx) => {
   }
 });
 
-bot.hears('🛒 New Order', (ctx) => {
+bot.hears('New Order', (ctx) => {
   ctx.reply('Please choose a platform:', {
     reply_markup: {
       inline_keyboard: [
-        [{ text: 'Instagram', callback_data: 'instagram' }],
-        [{ text: 'TikTok', callback_data: 'tiktok' }],
-        [{ text: 'Facebook', callback_data: 'facebook' }],
+        [{ text: '📸 Instagram', callback_data: 'platform_instagram' }],
+        [{ text: '📘 Facebook', callback_data: 'platform_facebook' }],
+        [{ text: '🎵 TikTok', callback_data: 'platform_tiktok' }]
       ]
     }
   });
 });
 
-const handlePlatformServices = async (ctx, platformServices) => {
-  const { data: services } = await axios.get(`${apiBaseURL}?action=services&key=${apiKey}`);
-  const serviceDetails = services.filter(s => platformServices.includes(s.service));
-  const serviceInfo = serviceDetails.map(s => 
-    `📦 Service: ${s.name}\n🗄️ Category: ${s.category}\n💵 Price: ${s.rate}$ per 1000\n`).join('\n');
-  
-  await ctx.reply(`🔥 Available Services:\n${serviceInfo}\n👇 Enter the order quantity:`);
+const serviceActions = {
+  platform_instagram: 'instagram',
+  platform_facebook: 'facebook',
+  platform_tiktok: 'tiktok'
 };
 
-bot.action('instagram', (ctx) => {
-  handlePlatformServices(ctx, [6443, 7128, 5333, 5341, 6828, 6827, 5457, 5458, 5459]);
+Object.entries(serviceActions).forEach(([platformCallback, platform]) => {
+  bot.action(platformCallback, async (ctx) => {
+    try {
+      const { data: services } = await axios.get(`${apiBaseURL}?action=services&key=${apiKey}&platform=${platform}`);
+      const availableServices = services.filter(s => s.platform === platform);
+
+      const serviceButtons = availableServices.map(s => ({
+        text: `📦 ${s.name}`,
+        callback_data: `${platform}_${s.id}`
+      }));
+
+      await ctx.reply('🔥 Available Services:', {
+        reply_markup: {
+          inline_keyboard: [
+            ...serviceButtons,
+            [{ text: '🔙 Back', callback_data: 'back_to_platforms' }]
+          ]
+        }
+      });
+    } catch (err) {
+      console.error(err);
+      ctx.reply('❌ Failed to retrieve services.');
+    }
+  });
 });
 
-bot.action('tiktok', (ctx) => {
-  handlePlatformServices(ctx, [6784, 6785, 6786, 5639, 5634, 5635, 5637, 5612, 5611, 5610]);
+bot.action(/(instagram|facebook|tiktok)_(\d+)/, async (ctx) => {
+  const [_, platform, serviceId] = ctx.match;
+  try {
+    const { data: services } = await axios.get(`${apiBaseURL}?action=services&key=${apiKey}&platform=${platform}`);
+    const service = services.find(s => s.id == serviceId);
+    
+    if (service) {
+      await ctx.reply(`📦 Service: ${service.name}\n🗄️ Category: ${service.category}\n💵 Price: ${service.rate}$ per 1000\n\nPlease enter the amount:`);
+      ctx.session.service = service;
+      ctx.session.platform = platform;
+    } else {
+      await ctx.reply('❌ Service not found.');
+    }
+  } catch (err) {
+    console.error(err);
+    ctx.reply('❌ Failed to retrieve service details.');
+  }
 });
 
-bot.action('facebook', (ctx) => {
-  handlePlatformServices(ctx, [7215, 6793, 7221, 6159, 6160, 6153]);
+bot.on('text', async (ctx) => {
+  if (ctx.session.service) {
+    const amount = parseInt(ctx.message.text, 10);
+    if (isNaN(amount) || amount <= 0) {
+      return ctx.reply('⚠️ Please enter a valid amount.');
+    }
+
+    ctx.session.amount = amount;
+    await ctx.reply('🔗 Please provide the link:');
+    return;
+  }
+
+  if (ctx.message.text.startsWith('http')) {
+    const link = ctx.message.text;
+    try {
+      const { data: response } = await axios.post(`${apiBaseURL}?action=create_order&key=${apiKey}`, {
+        platform: ctx.session.platform,
+        service_id: ctx.session.service.id,
+        amount: ctx.session.amount,
+        link
+      });
+
+      if (response.success) {
+        await ctx.reply('✅ Your order has been created successfully!');
+      } else {
+        await ctx.reply('❌ Failed to create order.');
+      }
+    } catch (err) {
+      console.error(err);
+      await ctx.reply('❌ An error occurred while creating the order.');
+    } finally {
+      delete ctx.session.service;
+      delete ctx.session.amount;
+      delete ctx.session.platform;
+    }
+    return;
+  }
+
+  if (ctx.message.text === 'Back') {
+    return ctx.reply('Please choose a platform:', {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: '📸 Instagram', callback_data: 'platform_instagram' }],
+          [{ text: '📘 Facebook', callback_data: 'platform_facebook' }],
+          [{ text: '🎵 TikTok', callback_data: 'platform_tiktok' }]
+        ]
+      }
+    });
+  }
 });
 
-bot.hears('💰 Wallet', (ctx) => {
-  ctx.reply('🔍 Checking your balance...');
-  // Handle wallet logic here
-});
-
-bot.hears('❓ FAQ', (ctx) => {
+bot.hears('FAQ', (ctx) => {
   ctx.reply(
-    '❓ Frequently Asked Questions:\n\n' +
-    '1. How do I place an order?\n' +
-    '2. What payment methods do you accept?\n' +
-    '3. How long does it take to deliver?\n' +
-    '4. What is the refund policy?\n' +
+    '❓ Frequently Asked Questions:\n' +
+    '1. How do I place an order?\n\n' +
+    '2. What payment methods do you accept?\n\n' +
+    '3. How long does it take to deliver?\n\n' +
+    '4. What is the refund policy?\n\n' +
     '5. How do I contact support?\n\n' +
-    'Please select the number of the FAQ you want an answer to.'
+    'Please enter the number of the FAQ you want the answer to (1-5).'
   );
 });
 
-bot.on('text', (ctx) => {
-  const faqNumber = parseInt(ctx.message.text.trim());
-  let response;
+bot.hears(/^\d+$/, (ctx) => {
+  const faqNumber = parseInt(ctx.message.text, 10);
+  const faqs = [
+    '1. To place an order, choose a platform and service, then provide the necessary details.',
+    '2. We accept payments via PayPal, credit card, and bank transfer.',
+    '3. Delivery times vary by service. Typically, it takes 1-3 days.',
+    '4. Refunds are processed on a case-by-case basis. Please contact support.',
+    '5. Contact support via WhatsApp at https://wa.me/message/OV5BS7MPRIMRO1 or call +255747437093.'
+  ];
 
-  switch (faqNumber) {
-    case 1:
-      response = 'To place an order, select a platform, then choose the service, and finally enter the quantity and link.';
-      break;
-    case 2:
-      response = 'We accept various payment methods including PayPal, credit cards, and cryptocurrencies.';
-      break;
-    case 3:
-      response = 'Delivery time depends on the service you choose. It can range from a few minutes to a few days.';
-      break;
-    case 4:
-      response = 'Refunds are available if the order was not completed or there was an issue with the delivery.';
-      break;
-    case 5:
-      response = 'You can contact support through WhatsApp or by calling the support number.';
-      break;
-    default:
-      response = '⚠️ Please enter a valid FAQ number (1-5).';
-  }
-
-  if (response) {
-    ctx.reply(response);
+  if (faqNumber >= 1 && faqNumber <= 5) {
+    ctx.reply(faqs[faqNumber - 1]);
+  } else {
+    ctx.reply('⚠️ Please enter a valid FAQ number (1-5).');
   }
 });
 
-bot.hears('📞 Support', (ctx) => {
-  ctx.reply('🆘 How can I assist you?', {
-    reply_markup: {
-      inline_keyboard: [
-        [{ text: '💬 WhatsApp Support', url: 'https://wa.me/message/OV5BS7MPRIMRO1' }],
-        [{ text: '📞 Call Support', url: 'tel:+255747437093' }]
-      ]
-    }
-  });
+bot.hears('Support', (ctx) => {
+  ctx.reply(
+    '📞 Support Information:\n' +
+    'For any issues, contact us on WhatsApp: [Support](https://wa.me/message/OV5BS7MPRIMRO1)\n' +
+    'Or call us at +255747437093'
+  );
 });
 
 bot.launch();

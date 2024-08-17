@@ -103,9 +103,10 @@ const platformServices = {
   }
 };
 
+// Customize message based on selected platform and service
 Object.keys(platformServices).forEach(platform => {
   bot.action(platform, async (ctx) => {
-    await ctx.reply('Select the service:', {
+    await ctx.reply(`Select the ${platform} service category:`, {
       reply_markup: {
         inline_keyboard: [
           [{ text: '👍 Followers', callback_data: `${platform}_followers` }],
@@ -128,7 +129,7 @@ Object.keys(platformServices).forEach(platform => {
         const serviceInfo = serviceDetails.map((s, index) =>
           `${index + 1}. 📦 Service: ${s.name}\n🗄️ Category: ${s.category}\n💵 Price: ${s.rate}$ per 1000\n`).join('\n');
 
-        await ctx.reply(`🔥 Available Services:\n${serviceInfo}\n👇 Select the service by its number:`);
+        await ctx.reply(`🔥 Available Services:\n${serviceInfo}\n👇 Select the ${platform} service that you want by its number:`);
       } catch (err) {
         console.error(err);
         ctx.reply('❌ Failed to retrieve services.');
@@ -137,58 +138,62 @@ Object.keys(platformServices).forEach(platform => {
   });
 });
 
-// Handle user's service selection by number
+// Capture user's service selection by number
+let selectedService = null;
+
 bot.on('text', async (ctx) => {
   const userText = ctx.message.text;
 
-  if (/^\d$/.test(userText)) {
+  if (/^\d+$/.test(userText) && !selectedService) {
     try {
-      // Simulating service selection here
-      const selectedService = parseInt(userText, 10);
-
+      selectedService = parseInt(userText, 10);
       await ctx.reply(`You selected service #${selectedService}.\nPlease enter the amount:`);
+    } catch (err) {
+      console.error(err);
+      await ctx.reply('❌ Failed to process your request. Please try again.');
+    }
+  } else if (selectedService && /^\d+$/.test(userText)) {
+    try {
+      const amount = parseInt(userText, 10);
+      await ctx.reply(`You entered amount: ${amount}. Please provide the link:`);
       
-      // Capture next step: amount
+      // Capture link and confirm order
       bot.on('text', async (ctx) => {
-        const amount = ctx.message.text;
-        await ctx.reply(`You entered amount: ${amount}. Please provide the link:`);
-        
-        // Capture next step: link
-        bot.on('text', async (ctx) => {
-          const link = ctx.message.text;
-          await ctx.reply(`You provided the link: ${link}. Confirm your order.`, {
-            reply_markup: {
-              inline_keyboard: [
-                [{ text: '✅ Confirm Order', callback_data: 'confirm_order' }]
-              ]
-            }
-          });
-
-          bot.action('confirm_order', async (ctx) => {
-            try {
-              // Call your API to process the order here
-              await ctx.reply('🚀 Processing your order...');
-
-              // Example API call
-              await axios.post(`${apiBaseURL}/order`, {
-                service: selectedService,
-                amount,
-                link,
-                key: apiKey
-              });
-
-              await ctx.reply('✅ Your order has been placed successfully!');
-            } catch (err) {
-              console.error(err);
-              await ctx.reply('❌ Failed to place the order. Please try again.');
-            }
-          });
+        const link = ctx.message.text;
+        await ctx.reply(`You provided the link: ${link}. Confirm your order.`, {
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: '✅ Confirm Order', callback_data: 'confirm_order' }]
+            ]
+          }
         });
       });
     } catch (err) {
       console.error(err);
       await ctx.reply('❌ Failed to process your request. Please try again.');
     }
+  }
+});
+
+// Confirm order logic
+bot.action('confirm_order', async (ctx) => {
+  try {
+    // Example API call to process the order
+    await ctx.reply('🚀 Processing your order...');
+
+    // Example API call
+    await axios.post(`${apiBaseURL}/order`, {
+      service: selectedService,
+      amount: ctx.message.text,
+      link: ctx.message.text,
+      key: apiKey
+    });
+
+    await ctx.reply('✅ Your order has been placed successfully!');
+    selectedService = null; // Reset the selected service after order is placed
+  } catch (err) {
+    console.error(err);
+    await ctx.reply('❌ Failed to place the order. Please try again.');
   }
 });
 
@@ -215,7 +220,7 @@ bot.on('text', async (ctx) => {
   const userText = ctx.message.text;
 
   // Handle FAQ responses
-  if (/^\d$/.test(userText)) {
+  if (/^\d+$/.test(userText)) {
     switch (userText) {
       case '1':
         await ctx.reply('📦 To place an order, simply choose a platform, select the service you want, and follow the instructions.');

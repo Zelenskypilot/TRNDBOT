@@ -35,24 +35,7 @@ setInterval(() => {
   fs.writeFileSync(stateFilePath, JSON.stringify(userState, null, 2));
 }, 10000);
 
-// Finalizing the bot with a shutdown hook
-process.on('exit', () => {
-  fs.writeFileSync(stateFilePath, JSON.stringify(userState, null, 2));
-  console.log('Bot is shutting down...');
-});
-
-// Debugging unhandled rejections
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
-});
-
-// Final error logging and bot cleanup
-process.on('uncaughtException', (err) => {
-  console.error('Uncaught Exception:', err);
-  process.exit(1);
-});
-
-// Initialize bot
+// Handle the /start command
 bot.start(async (ctx) => {
   userState[ctx.from.id] = { stage: 'start' }; // Reset user state on start
   try {
@@ -82,6 +65,7 @@ bot.start(async (ctx) => {
   }
 });
 
+// Handle the "Confirm join" button
 bot.action('confirm_join', async (ctx) => {
   try {
     const chatMember = await bot.telegram.getChatMember('@trendifysmmtelebot', ctx.from.id);
@@ -105,7 +89,7 @@ bot.action('confirm_join', async (ctx) => {
   }
 });
 
-// New Order command
+// Handle "New Order" command
 bot.hears('🆕 New Order', (ctx) => {
   userState[ctx.from.id] = { stage: 'select_platform' }; // Set user state to selecting platform
   ctx.reply('Please choose a platform:', {
@@ -214,25 +198,22 @@ bot.action('confirm_order', async (ctx) => {
   if (user && user.stage === 'confirm_order') {
     try {
       await ctx.reply('🚀 Processing your order...');
-      
-      // Construct the order creation API URL
-      const orderUrl = `${apiBaseURL}?action=add&service=${user.service}&link=${encodeURIComponent(user.link)}&quantity=${user.amount}&key=${apiKey}`;
-      
-      // Make the API request to create the order
-      const response = await axios.post(orderUrl);
-      
-      // Check if the order was successfully created
-      if (response.data && response.data.order) {
+      const response = await axios.post(`${apiBaseURL}?action=add`, {
+        service: user.service,
+        link: user.link,
+        quantity: user.amount,
+        key: apiKey
+      });
+
+      if (response.data.order) {
         await ctx.reply(`✅ Your order has been placed successfully! Order ID: ${response.data.order}`);
       } else {
         await ctx.reply('❌ Failed to place the order. Please try again.');
       }
-      
-      // Reset the user state after the order is placed
-      userState[ctx.from.id] = null;
+      userState[ctx.from.id] = null; // Reset the user state after order is placed
     } catch (err) {
-      console.error('Error placing order:', err);
-      await ctx.reply('❌ An error occurred while placing your order. Please try again.');
+      console.error(err);
+      await ctx.reply('❌ Failed to place the order. Please try again.');
     }
   }
 });
@@ -241,7 +222,7 @@ bot.action('confirm_order', async (ctx) => {
 bot.hears('📞 Support', (ctx) => {
   ctx.reply(`📞 Need help? Contact us:
   WhatsApp: https://wa.me/message/OV5LFAMO3EOGE1
-  Phone: +1234567890`);
+  Call: +1234567890`);
 });
 
 // FAQ button logic
@@ -253,38 +234,37 @@ bot.hears('❓ FAQ', (ctx) => {
         [{ text: '2. What payment methods are accepted?', callback_data: 'faq_2' }],
         [{ text: '3. How can I contact support?', callback_data: 'faq_3' }],
         [{ text: '4. Are there any discounts available?', callback_data: 'faq_4' }],
-        [{ text: '5. How can I track my order?', callback_data: 'faq_5' }]
+        [{ text: '5. How long does it take to complete an order?', callback_data: 'faq_5' }]
       ]
     }
   });
 });
 
 // Handle FAQ responses
-bot.action('faq_1', (ctx) => ctx.reply('1. How does this service work? - Our service provides various social media growth options based on your needs. You can select a service, specify the details, and we will process your request accordingly.'));
-bot.action('faq_2', (ctx) => ctx.reply('2. What payment methods are accepted? - We accept various payment methods including credit/debit cards, PayPal, and cryptocurrencies.'));
-bot.action('faq_3', (ctx) => ctx.reply('3. How can I contact support? - You can contact support via the support button or through our WhatsApp and phone contacts.'));
-bot.action('faq_4', (ctx) => ctx.reply('4. Are there any discounts available? - Yes, we offer periodic discounts. Please check our website or contact support for more details.'));
-bot.action('faq_5', (ctx) => ctx.reply('5. How can I track my order? - You can track your order status in your account dashboard or by contacting support.'));
+bot.action('faq_1', (ctx) => {
+  ctx.reply('Our service provides real-time social media marketing through a user-friendly platform. Simply choose a platform, select a service, and enter the required details to place an order.');
+});
 
-// Middleware to reset state when switching between different sections
-bot.on('message', (ctx, next) => {
-  const user = userState[ctx.from.id];
-  if (user && ['start', 'select_platform', 'select_category', 'select_service', 'enter_amount', 'enter_link', 'confirm_order'].includes(user.stage)) {
-    // Do nothing, continue to process
-    return next();
-  }
-  // Reset state if user input does not match expected stages
-  userState[ctx.from.id] = null;
-  ctx.reply('⚠️ Your current action has been reset. Please start a new flow or use the menu.');
+bot.action('faq_2', (ctx) => {
+  ctx.reply('We accept various payment methods including PayPal, Bitcoin, Ethereum, and major credit cards.');
+});
+
+bot.action('faq_3', (ctx) => {
+  ctx.reply('You can contact our support team via WhatsApp at https://wa.me/message/OV5LFAMO3EOGE1 or by calling us at +1234567890.');
+});
+
+bot.action('faq_4', (ctx) => {
+  ctx.reply('Yes, we offer discounts for bulk orders. Contact support for more details.');
+});
+
+bot.action('faq_5', (ctx) => {
+  ctx.reply('The time to complete an order depends on the service you select. Most orders are completed within a few hours.');
+});
+
+// Capture other commands and text
+bot.on('message', (ctx) => {
+  ctx.reply('🚫 I didn\'t understand that command. Please choose an option from the menu or type /start to begin.');
 });
 
 // Start the bot
 bot.launch();
-
-// Handle shutdowns gracefully
-process.once('SIGINT', () => {
-  bot.stop('SIGINT');
-});
-process.once('SIGTERM', () => {
-  bot.stop('SIGTERM');
-});

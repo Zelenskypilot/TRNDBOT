@@ -1,8 +1,8 @@
 require('dotenv').config();
 const express = require('express');
-const { Telegraf } = require('telegraf');
+const { Telegraf, Markup } = require('telegraf');
 const axios = require('axios');
-const Iconify = require('@iconify/iconify');
+const FontAwesome = require('@fortawesome/fontawesome-free');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -55,16 +55,12 @@ bot.action('confirm_join', async (ctx) => {
     const chatMember = await bot.telegram.getChatMember(`@${channelUsername}`, ctx.from.id);
     if (chatMember.status === 'member' || chatMember.status === 'administrator' || chatMember.status === 'creator') {
       await ctx.reply('Thank you for joining our channel! How can I assist you today?', {
-        reply_markup: {
-          keyboard: [
-            [{ text: '📦 New Order', callback_data: 'new_order' }],
-            [{ text: '💼 Wallet', callback_data: 'wallet' }],
-            [{ text: '❓ FAQ', callback_data: 'faq' }],
-            [{ text: '🆘 Support', callback_data: 'support' }],
-          ],
-          resize_keyboard: true,
-          one_time_keyboard: true,
-        }
+        reply_markup: Markup.keyboard([
+          ['💼 New Order', '💰 Wallet'],
+          ['❓ FAQ', '🆘 Support'],
+        ])
+        .resize()
+        .oneTime()
       });
     } else {
       await ctx.reply('🚫 You must join our channel to use this bot.');
@@ -75,16 +71,13 @@ bot.action('confirm_join', async (ctx) => {
   }
 });
 
-// New Order command
-bot.hears('📦 New Order', (ctx) => {
+bot.hears('💼 New Order', (ctx) => {
   ctx.reply('Please choose a platform:', {
-    reply_markup: {
-      inline_keyboard: [
-        [{ text: `${Iconify.renderHTML('fa-brands:instagram')} Instagram`, callback_data: 'instagram' }],
-        [{ text: `${Iconify.renderHTML('fa-brands:facebook')} Facebook`, callback_data: 'facebook' }],
-        [{ text: `${Iconify.renderHTML('fa-brands:tiktok')} TikTok`, callback_data: 'tiktok' }],
-      ]
-    }
+    reply_markup: Markup.inlineKeyboard([
+      [Markup.button.callback(`${FontAwesome.icon('fa-instagram').html()} Instagram`, 'instagram')],
+      [Markup.button.callback(`${FontAwesome.icon('fa-facebook').html()} Facebook`, 'facebook')],
+      [Markup.button.callback(`${FontAwesome.icon('fa-tiktok').html()} TikTok`, 'tiktok')],
+    ])
   });
 });
 
@@ -160,35 +153,29 @@ Object.keys(facebookServices).forEach(service => {
   });
 });
 
-// Back button functionality
-bot.hears('🔙 Back', (ctx) => {
+bot.hears('Back', (ctx) => {
   ctx.reply('Please choose a platform:', {
-    reply_markup: {
-      inline_keyboard: [
-        [{ text: `${Iconify.renderHTML('fa-brands:instagram')} Instagram`, callback_data: 'instagram' }],
-        [{ text: `${Iconify.renderHTML('fa-brands:facebook')} Facebook`, callback_data: 'facebook' }],
-        [{ text: `${Iconify.renderHTML('fa-brands:tiktok')} TikTok`, callback_data: 'tiktok' }],
-      ]
-    }
+    reply_markup: Markup.inlineKeyboard([
+      [Markup.button.callback(`${FontAwesome.icon('fa-instagram').html()} Instagram`, 'instagram')],
+      [Markup.button.callback(`${FontAwesome.icon('fa-facebook').html()} Facebook`, 'facebook')],
+      [Markup.button.callback(`${FontAwesome.icon('fa-tiktok').html()} TikTok`, 'tiktok')],
+    ])
   });
 });
 
-// Wallet, FAQ, and Support commands
-bot.hears('💼 Wallet', (ctx) => {
+// Handling wallet, FAQ, and support commands
+bot.hears('💰 Wallet', (ctx) => {
   ctx.reply('🔍 Checking your balance...');
   // Handle wallet logic here
 });
 
 bot.hears('❓ FAQ', (ctx) => {
-  ctx.reply('❓ Frequently Asked Questions:\n1. How to place an order?\n2. How to track my order?\n3. What is the delivery time?\n4. Can I cancel an order?\n5. What payment methods do you accept?');
+  ctx.reply('❓ Frequently Asked Questions:\n1. How do I place an order?\n2. What payment methods do you accept?\n3. How long does it take to deliver?\n4. What is the refund policy?\n5. How do I contact support?');
 });
 
 bot.hears('🆘 Support', (ctx) => {
-  ctx.reply('💬 How can I assist you?\n\n📞 Call us: +255747437093\n💬 WhatsApp us: [Click here](https://wa.me/message/OV5BS7MPRIMRO1)', {
-    parse_mode: 'Markdown'
-  });
+  ctx.reply('🆘 How can I assist you? Contact support via:\n📱 WhatsApp: https://wa.me/message/OV5BS7MPRIMRO1\n📞 Call: +255747437093');
 });
 
-// Handle the bot's launch
 bot.launch();
 console.log('Bot is running...');

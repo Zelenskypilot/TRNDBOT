@@ -1,29 +1,26 @@
 require('dotenv').config();
+const express = require('express');
 const { Telegraf } = require('telegraf');
 const axios = require('axios');
-const express = require('express');
-const https = require('https');
 
-// Initialize the bot with the token from environment variables
+const app = express();
+const PORT = process.env.PORT || 3000;
 const bot = new Telegraf(process.env.BOT_TOKEN);
 const apiKey = process.env.API_KEY;
-const channelID = '@trendifysmmtelebot'; // Your channel ID
+const channelUsername = 'trendifysmmtelebot'; // Replace with your actual channel username (without @)
 const apiBaseURL = 'https://trendifysmm.com/api/v2';
 
-// Create an Express application to keep the bot alive
-const app = express();
-
-// Simple route to respond to uptime checks
+// Basic Express route to keep the app alive
 app.get('/', (req, res) => {
-  res.send('Bot is running and alive!');
+  res.send('Trendifysmm Bot is running...');
 });
 
-// Setup an HTTPS server
-https.createServer(app).listen(process.env.PORT || 3000, () => {
-  console.log('HTTPS server is running...');
+// Listen to the specified port
+app.listen(PORT, () => {
+  console.log(`HTTPS server is running on port ${PORT}`);
 });
 
-// Start command to welcome users
+// Telegram bot logic
 bot.start(async (ctx) => {
   try {
     await ctx.reply(
@@ -34,7 +31,7 @@ bot.start(async (ctx) => {
             [
               {
                 text: 'Join our channel',
-                url: `https://t.me/${channelID}`
+                url: `https://t.me/${channelUsername}`
               },
             ],
             [
@@ -52,10 +49,9 @@ bot.start(async (ctx) => {
   }
 });
 
-// Handle confirmation of channel join
 bot.action('confirm_join', async (ctx) => {
   try {
-    const chatMember = await bot.telegram.getChatMember(channelID, ctx.from.id);
+    const chatMember = await bot.telegram.getChatMember(`@${channelUsername}`, ctx.from.id);
     if (chatMember.status === 'member' || chatMember.status === 'administrator' || chatMember.status === 'creator') {
       await ctx.reply('Thank you for joining our channel! How can I assist you today?', {
         reply_markup: {
@@ -76,7 +72,7 @@ bot.action('confirm_join', async (ctx) => {
   }
 });
 
-// Handle new order command
+// New Order command
 bot.hears('New Order', (ctx) => {
   ctx.reply('Please choose a platform:', {
     reply_markup: {
@@ -161,7 +157,19 @@ Object.keys(facebookServices).forEach(service => {
   });
 });
 
-// Handle other commands like Wallet, FAQ, and Help
+bot.hears('Back', (ctx) => {
+  ctx.reply('Please choose a platform:', {
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: 'Instagram', callback_data: 'instagram' }],
+        [{ text: 'Facebook', callback_data: 'facebook' }],
+        [{ text: 'TikTok', callback_data: 'tiktok' }],
+      ]
+    }
+  });
+});
+
+// Handling wallet, FAQ, and help commands
 bot.hears('Wallet', (ctx) => {
   ctx.reply('🔍 Checking your balance...');
   // Handle wallet logic here
@@ -177,6 +185,5 @@ bot.hears('Help', (ctx) => {
   // Handle help logic here
 });
 
-// Launch your bot
 bot.launch();
 console.log('Bot is running...');

@@ -1,12 +1,29 @@
 require('dotenv').config();
 const { Telegraf } = require('telegraf');
 const axios = require('axios');
+const express = require('express');
+const https = require('https');
 
+// Initialize the bot with the token from environment variables
 const bot = new Telegraf(process.env.BOT_TOKEN);
 const apiKey = process.env.API_KEY;
 const channelID = '@trendifysmmtelebot'; // Your channel ID
 const apiBaseURL = 'https://trendifysmm.com/api/v2';
 
+// Create an Express application to keep the bot alive
+const app = express();
+
+// Simple route to respond to uptime checks
+app.get('/', (req, res) => {
+  res.send('Bot is running and alive!');
+});
+
+// Setup an HTTPS server
+https.createServer(app).listen(process.env.PORT || 3000, () => {
+  console.log('HTTPS server is running...');
+});
+
+// Start command to welcome users
 bot.start(async (ctx) => {
   try {
     await ctx.reply(
@@ -35,6 +52,7 @@ bot.start(async (ctx) => {
   }
 });
 
+// Handle confirmation of channel join
 bot.action('confirm_join', async (ctx) => {
   try {
     const chatMember = await bot.telegram.getChatMember(channelID, ctx.from.id);
@@ -58,6 +76,7 @@ bot.action('confirm_join', async (ctx) => {
   }
 });
 
+// Handle new order command
 bot.hears('New Order', (ctx) => {
   ctx.reply('Please choose a platform:', {
     reply_markup: {
@@ -65,19 +84,6 @@ bot.hears('New Order', (ctx) => {
         [{ text: 'Instagram', callback_data: 'instagram' }],
         [{ text: 'Facebook', callback_data: 'facebook' }],
         [{ text: 'TikTok', callback_data: 'tiktok' }],
-      ]
-    }
-  });
-});
-
-bot.action('instagram', (ctx) => {
-  ctx.reply('Choose a service for Instagram:', {
-    reply_markup: {
-      inline_keyboard: [
-        [{ text: 'Followers', callback_data: 'insta_followers' }],
-        [{ text: 'Likes', callback_data: 'insta_likes' }],
-        [{ text: 'Comments', callback_data: 'insta_comments' }],
-        [{ text: 'Back', callback_data: 'new_order' }],
       ]
     }
   });
@@ -155,19 +161,7 @@ Object.keys(facebookServices).forEach(service => {
   });
 });
 
-bot.hears('Back', (ctx) => {
-  ctx.reply('Please choose a platform:', {
-    reply_markup: {
-      inline_keyboard: [
-        [{ text: 'Instagram', callback_data: 'instagram' }],
-        [{ text: 'Facebook', callback_data: 'facebook' }],
-        [{ text: 'TikTok', callback_data: 'tiktok' }],
-      ]
-    }
-  });
-});
-
-// Handling wallet, FAQ, and help commands
+// Handle other commands like Wallet, FAQ, and Help
 bot.hears('Wallet', (ctx) => {
   ctx.reply('🔍 Checking your balance...');
   // Handle wallet logic here
@@ -183,5 +177,6 @@ bot.hears('Help', (ctx) => {
   // Handle help logic here
 });
 
+// Launch your bot
 bot.launch();
 console.log('Bot is running...');

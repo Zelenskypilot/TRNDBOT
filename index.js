@@ -61,7 +61,7 @@ bot.action('confirm_join', async (ctx) => {
         reply_markup: {
           keyboard: [
             ['🆕 New Order', '💰 Wallet'],
-            ['❓ FAQ', '📞 Support'],
+            ['📞 Support'],
             ['ADMIN'],
           ],
           resize_keyboard: true,
@@ -200,69 +200,34 @@ bot.on('text', async (ctx) => {
     try {
       const response = await axios.get(`${apiBaseURL}?action=status&order=${orderId}&key=${apiKey}`);
       const { charge, start_count, status, remains, currency } = response.data;
+
       await ctx.reply(`📋 Order Status:\n- Charge: ${charge} ${currency}\n- Start Count: ${start_count}\n- Status: ${status}\n- Remains: ${remains}`);
       
-      // Reset user state after checking the order status
-      userState[ctx.from.id] = null; 
+      userState[ctx.from.id] = null; // Reset the user state after checking order status
     } catch (err) {
       console.error(err);
-      await ctx.reply('❌ Failed to retrieve the order status. Please check the Order ID and try again.');
+      await ctx.reply('❌ Failed to fetch the order status. Please try again.');
     }
   }
 });
 
 // Support command
-bot.hears('📞 Support', (ctx) => {
-  userState[ctx.from.id] = { stage: 'support' };
-  ctx.reply('How can we assist you? You can reach us via:', {
-    reply_markup: {
-      inline_keyboard: [
-        [{ text: 'WhatsApp', url: 'https://wa.me/your-whatsapp-number' }],
-        [{ text: 'Phone', url: 'tel:+1234567890' }],
-      ]
-    }
-  });
-});
-
-// FAQ command
-bot.hears('❓ FAQ', (ctx) => {
-  ctx.reply('Here are the most common FAQs:', {
-    reply_markup: {
-      inline_keyboard: [
-        [{ text: '1. How to place an order?', callback_data: 'faq_1' }],
-        [{ text: '2. What payment methods are accepted?', callback_data: 'faq_2' }],
-        [{ text: '3. How long does it take to process an order?', callback_data: 'faq_3' }],
-        [{ text: '4. Can I cancel an order?', callback_data: 'faq_4' }],
-        [{ text: '5. How to contact support?', callback_data: 'faq_5' }]
-      ]
-    }
-  });
-});
-
-// Handle FAQ responses
-bot.action(/faq_\d+/, (ctx) => {
-  const faqNumber = ctx.match[0].split('_')[1];
-  const faqs = {
-    1: 'To place an order, click on "New Order" and follow the instructions to select a platform, service, and enter the required details.',
-    2: 'We accept various payment methods including PayPal, Credit Cards, and Cryptocurrency.',
-    3: 'Order processing time depends on the service selected. Most orders are completed within 24-48 hours.',
-    4: 'Orders cannot be canceled once they are placed. Please ensure all details are correct before confirming.',
-    5: 'You can contact support via WhatsApp or Phone using the "Support" button.'
-  };
-  
-  ctx.reply(faqs[faqNumber]);
-});
-
-// Default handler for any other text input not covered by the bot logic
-bot.on('text', (ctx) => {
-  if (!userState[ctx.from.id]) {
-    ctx.reply('⚠️ Please follow the steps properly.');
+bot.hears('📞 Support', async (ctx) => {
+  try {
+    await ctx.reply('For support, you can contact us via the following methods:', {
+      reply_markup: {
+        inline_keyboard: [
+          [
+            { text: '📞 Call Us', url: 'tel:+255747437093' },
+            { text: '💬 WhatsApp', url: 'https://wa.me/message/OV5BS7MPRIMRO1' }
+          ]
+        ]
+      }
+    });
+  } catch (err) {
+    console.error(err);
   }
 });
 
 // Launch the bot
-bot.launch().then(() => {
-  console.log('Bot is up and running...');
-}).catch(err => {
-  console.error('Failed to launch the bot:', err);
-});
+bot.launch();

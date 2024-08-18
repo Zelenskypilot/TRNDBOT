@@ -2,7 +2,6 @@ require('dotenv').config();
 const express = require('express');
 const { Telegraf } = require('telegraf');
 const axios = require('axios');
-const fs = require('fs');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -23,19 +22,6 @@ app.listen(PORT, () => {
 // Track conversation state
 let userState = {};
 
-// Load user states from file
-const stateFilePath = 'userState.json';
-if (fs.existsSync(stateFilePath)) {
-  const savedStates = fs.readFileSync(stateFilePath, 'utf-8');
-  userState = JSON.parse(savedStates);
-}
-
-// Save user states to file periodically
-setInterval(() => {
-  fs.writeFileSync(stateFilePath, JSON.stringify(userState, null, 2));
-}, 10000);
-
-// Handle the /start command
 bot.start(async (ctx) => {
   userState[ctx.from.id] = { stage: 'start' }; // Reset user state on start
   try {
@@ -65,7 +51,6 @@ bot.start(async (ctx) => {
   }
 });
 
-// Handle the "Confirm join" button
 bot.action('confirm_join', async (ctx) => {
   try {
     const chatMember = await bot.telegram.getChatMember('@trendifysmmtelebot', ctx.from.id);
@@ -89,7 +74,7 @@ bot.action('confirm_join', async (ctx) => {
   }
 });
 
-// Handle "New Order" command
+// New Order command
 bot.hears('🆕 New Order', (ctx) => {
   userState[ctx.from.id] = { stage: 'select_platform' }; // Set user state to selecting platform
   ctx.reply('Please choose a platform:', {
@@ -106,7 +91,7 @@ bot.hears('🆕 New Order', (ctx) => {
 // Service categories for each platform
 const platformServices = {
   instagram: {
-    followers: [6443, 7128, 5333, 5341],
+    followers: [6443, 7128, 5333, 6449],
     likes: [6828, 6827],
     comments: [5457, 5458, 5459]
   },
@@ -120,6 +105,17 @@ const platformServices = {
     page_followers: [6793, 7221],
     likes: [6159, 6160, 6153]
   }
+};
+
+// Minimum amount logic for specific service IDs
+const minAmount = {
+  7128: 10, 6443: 10, 5333: 10, 6449: 10,
+  6828: 10, 6827: 10, 5457: 10, 5458: 50, 5459: 15,
+  6784: 50, 6785: 10, 6786: 10,
+  5639: 1000, 5634: 100, 5635: 100, 5637: 100,
+  5612: 10, 5611: 50, 5610: 10,
+  7215: 100, 6793: 100, 7221: 100,
+  6159: 10, 6160: 20, 6153: 50
 };
 
 // Customize message based on selected platform and service
@@ -174,9 +170,17 @@ bot.on('text', async (ctx) => {
       await ctx.reply('⚠️ Please enter a valid service number.');
     }
   } else if (user && user.stage === 'enter_amount' && /^\d+$/.test(userText)) {
-    userState[ctx.from.id].amount = parseInt(userText, 10);
-    userState[ctx.from.id].stage = 'enter_link';
-    await ctx.reply(`You entered amount: ${userText}. Please provide the link:`);
+    const amount = parseInt(userText, 10);
+    const serviceId = user.service;
+    const minRequired = minAmount[serviceId] || 1;
+
+    if (amount >= minRequired) {
+      userState[ctx.from.id].amount = amount;
+      userState[ctx.from.id].stage = 'enter_link';
+      await ctx.reply(`You entered amount: ${userText}. Please provide the link:`);
+    } else {
+      await ctx.reply(`⚠️ The minimum amount for this service is ${minRequired}. Please enter a valid amount.`);
+    }
   } else if (user && user.stage === 'enter_link') {
     userState[ctx.from.id].link = userText;
     userState[ctx.from.id].stage = 'confirm_order';
@@ -198,18 +202,14 @@ bot.action('confirm_order', async (ctx) => {
   if (user && user.stage === 'confirm_order') {
     try {
       await ctx.reply('🚀 Processing your order...');
-      const response = await axios.post(`${apiBaseURL}?action=add`, {
-        service: user.service,
-        link: user.link,
-        quantity: user.amount,
-        key: apiKey
-      });
-
+      const response = await axios.post(`${apiBaseURL}?action=add&service=${user.service}&link=${encodeURIComponent(user.link)}&quantity=${user.amount}&key=${apiKey}`);
+      
       if (response.data.order) {
-        await ctx.reply(`✅ Your order has been placed successfully! Order ID: ${response.data.order}`);
+        await ctx.reply('✅ Your order has been placed successfully!');
       } else {
         await ctx.reply('❌ Failed to place the order. Please try again.');
       }
+
       userState[ctx.from.id] = null; // Reset the user state after order is placed
     } catch (err) {
       console.error(err);
@@ -220,51 +220,75 @@ bot.action('confirm_order', async (ctx) => {
 
 // Support button logic
 bot.hears('📞 Support', (ctx) => {
-  ctx.reply(`📞 Need help? Contact us:
-  WhatsApp: https://wa.me/message/OV5LFAMO3EOGE1
-  Call: +1234567890`);
-});
-
-// FAQ button logic
-bot.hears('❓ FAQ', (ctx) => {
-  ctx.reply('Select an FAQ number to get the answer:', {
+  userState[ctx.from.id] = null; // Cancel any ongoing flow
+  ctx.reply('How can we assist you? Please choose one of the following options:', {
     reply_markup: {
       inline_keyboard: [
-        [{ text: '1. How does this service work?', callback_data: 'faq_1' }],
-        [{ text: '2. What payment methods are accepted?', callback_data: 'faq_2' }],
-        [{ text: '3. How can I contact support?', callback_data: 'faq_3' }],
-        [{ text: '4. Are there any discounts available?', callback_data: 'faq_4' }],
-        [{ text: '5. How long does it take to complete an order?', callback_data: 'faq_5' }]
+        [{ text: '📱 Contact via WhatsApp', url: 'https://wa.me/+123456789' }],
+        [{ text: '📞 Call Us', url: 'tel:+123456789' }],
       ]
     }
   });
 });
 
-// Handle FAQ responses
-bot.action('faq_1', (ctx) => {
-  ctx.reply('Our service provides real-time social media marketing through a user-friendly platform. Simply choose a platform, select a service, and enter the required details to place an order.');
+// Wallet button logic
+bot.hears('💰 Wallet', async (ctx) => {
+  userState[ctx.from.id] = null; // Cancel any ongoing flow
+  try {
+    const { data: wallet } = await axios.get(`${apiBaseURL}?action=balance&key=${apiKey}`);
+    await ctx.reply(`💵 Your current wallet balance is: ${wallet.balance}$`);
+  } catch (err) {
+    console.error(err);
+    await ctx.reply('❌ Failed to retrieve your wallet balance.');
+  }
 });
 
-bot.action('faq_2', (ctx) => {
-  ctx.reply('We accept various payment methods including PayPal, Bitcoin, Ethereum, and major credit cards.');
+// FAQ button logic
+bot.hears('❓ FAQ', (ctx) => {
+  userState[ctx.from.id] = null; // Cancel any ongoing flow
+  ctx.reply(
+    'Frequently Asked Questions (FAQ):\n' +
+    '1️⃣ How to create an order?\n' +
+    '2️⃣ How to check my order status?\n' +
+    '3️⃣ What payment methods are accepted?\n' +
+    '4️⃣ How long does it take to deliver?\n' +
+    '5️⃣ What should I do if I face an issue?',
+    {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: '🔍 Learn more', callback_data: 'faq_details' }]
+        ]
+      }
+    }
+  );
 });
 
-bot.action('faq_3', (ctx) => {
-  ctx.reply('You can contact our support team via WhatsApp at https://wa.me/message/OV5LFAMO3EOGE1 or by calling us at +1234567890.');
+bot.action('faq_details', (ctx) => {
+  ctx.reply(
+    '1️⃣ To create an order, select "New Order" from the menu and follow the prompts.\n' +
+    '2️⃣ To check your order status, select "Order History" and enter your order ID.\n' +
+    '3️⃣ We accept PayPal, credit cards, and cryptocurrency.\n' +
+    '4️⃣ Delivery time depends on the service, typically within 24-48 hours.\n' +
+    '5️⃣ If you face an issue, contact support through the "Support" option.'
+  );
 });
 
-bot.action('faq_4', (ctx) => {
-  ctx.reply('Yes, we offer discounts for bulk orders. Contact support for more details.');
+// Handling interactions with custom keyboard during an ongoing flow
+bot.on('message', async (ctx) => {
+  if (userState[ctx.from.id] && userState[ctx.from.id].stage) {
+    await ctx.reply('⚠️ You have initiated a new flow. The previous flow has been canceled.');
+    userState[ctx.from.id] = null; // Cancel the ongoing flow
+  }
 });
 
-bot.action('faq_5', (ctx) => {
-  ctx.reply('The time to complete an order depends on the service you select. Most orders are completed within a few hours.');
-});
-
-// Capture other commands and text
-bot.on('message', (ctx) => {
-  ctx.reply('🚫 I didn\'t understand that command. Please choose an option from the menu or type /start to begin.');
+// Error handling
+bot.catch((err) => {
+  console.error('Error encountered:', err);
 });
 
 // Start the bot
 bot.launch();
+
+// Enable graceful stop
+process.once('SIGINT', () => bot.stop('SIGINT'));
+process.once('SIGTERM', () => bot.stop('SIGTERM'));

@@ -9,57 +9,46 @@ const bot = new Telegraf(process.env.BOT_TOKEN);
 const apiKey = process.env.API_KEY;
 const apiBaseURL = 'https://trendifysmm.com/api/v2';
 
+// Basic Express route to keep the app alive
 app.get('/', (req, res) => {
   res.send('Trendifysmm Bot is running...');
 });
 
+// Listen to the specified port
 app.listen(PORT, () => {
   console.log(`HTTPS server is running on port ${PORT}`);
 });
 
+// Track conversation state
 let userState = {};
 
-const serviceMinimumAmounts = {
-  7128: 10,
-  6443: 10,
-  5333: 10,
-  6449: 10,
-  6828: 10,
-  6827: 10,
-  5457: 10,
-  5458: 50,
-  5459: 15,
-  6784: 50,
-  5637: 50,
-  5611: 50,
-  6785: 10,
-  6786: 10,
-  5612: 10,
-  5610: 10,
-  6159: 10,
-  5639: 100,
-  7215: 100,
-  6793: 100,
-  7221: 100,
-  5635: 100,
-  5634: 100,
-  6160: 20,
-  6153: 50
-};
-
 bot.start(async (ctx) => {
-  userState[ctx.from.id] = { stage: 'start' };
-  await ctx.reply(
-    '🎉 Welcome to the Trendifysmm SMM Panel Bot! To use this bot, you must first join our channel.',
-    {
-      reply_markup: {
-        inline_keyboard: [
-          [{ text: 'Join our channel', url: 'https://t.me/trendifysmmtelebot' }],
-          [{ text: 'Confirm join', callback_data: 'confirm_join' }]
-        ]
+  userState[ctx.from.id] = { stage: 'start' }; // Reset user state on start
+  try {
+    await ctx.reply(
+      '🎉 Welcome to the Trendifysmm SMM Panel Bot! To use this bot, you must first join our channel.',
+      {
+        reply_markup: {
+          inline_keyboard: [
+            [
+              {
+                text: 'Join our channel',
+                url: 'https://t.me/trendifysmmtelebot'
+              },
+            ],
+            [
+              {
+                text: 'Confirm join',
+                callback_data: 'confirm_join'
+              }
+            ]
+          ]
+        }
       }
-    }
-  );
+    );
+  } catch (err) {
+    console.error(err);
+  }
 });
 
 bot.action('confirm_join', async (ctx) => {
@@ -70,7 +59,7 @@ bot.action('confirm_join', async (ctx) => {
         reply_markup: {
           keyboard: [
             ['🆕 New Order', '💰 Wallet'],
-            ['❓ FAQ', '📞 Support', '📋 Order Status', '👮 ADMIN'],
+            ['❓ FAQ', '📞 Support'],
           ],
           resize_keyboard: true,
           one_time_keyboard: true,
@@ -85,24 +74,117 @@ bot.action('confirm_join', async (ctx) => {
   }
 });
 
-const resetUserState = async (ctx) => {
-  userState[ctx.from.id] = null;
-};
+// New Order command
+bot.hears('🆕 New Order', async (ctx) => {
+  userState[ctx.from.id] = { stage: 'select_service' }; // Set user state to selecting service
 
-bot.hears('📞 Support', async (ctx) => {
-  await resetUserState(ctx);
-  await ctx.reply('How can we assist you? Please choose one of the following options:', {
+  try {
+    // Get the list of all services from the API
+    const { data: services } = await axios.get(`${apiBaseURL}?action=services&key=${apiKey}`);
+    
+    // Filter services by the predefined IDs
+    const serviceIDs = [
+      6443, 7128, 5333, 6449, 6828, 6827, 5457, 5458, 5459, 6784,
+      6785, 6786, 5639, 5634, 5635, 5637, 5612, 5611, 5610, 7215,
+      6793, 7221, 6159, 6160, 6153
+    ];
+
+    const serviceDetails = services.filter(s => serviceIDs.includes(s.service));
+    const serviceInfo = serviceDetails.map((s, index) =>
+      `${index + 1}. 📦 Service: ${s.name}\n🗄️ Category: ${s.category}\n💵 Price: ${s.rate}$ per 1000\n`).join('\n');
+
+    await ctx.reply(`🔥 Available Services:\n${serviceInfo}\n👇 Select the service by entering its number:`);
+  } catch (err) {
+    console.error(err);
+    await ctx.reply('❌ Failed to retrieve services.');
+  }
+});
+
+// Capture user's service selection by number
+bot.on('text', async (ctx) => {
+  const userText = ctx.message.text;
+  const user = userState[ctx.from.id];
+
+  if (user && user.stage === 'select_service' && /^\d+$/.test(userText)) {
+    const serviceIndex = parseInt(userText, 10) - 1;
+    const serviceIDs = [
+      6443, 7128, 5333, 6449, 6828, 6827, 5457, 5458, 5459, 6784,
+      6785, 6786, 5639, 5634, 5635, 5637, 5612, 5611, 5610, 7215,
+      6793, 7221, 6159, 6160, 6153
+    ];
+
+    if (serviceIndex >= 0 && serviceIndex < serviceIDs.length) {
+      userState[ctx.from.id].service = serviceIDs[serviceIndex];
+      userState[ctx.from.id].stage = 'enter_amount';
+      await ctx.reply(`You selected service #${userText}.\nPlease enter the amount:`);
+    } else {
+      await ctx.reply('⚠️ Please enter a valid service number.');
+    }
+  } else if (user && user.stage === 'enter_amount' && /^\d+$/.test(userText)) {
+    const amount = parseInt(userText, 10);
+    const serviceId = user.service;
+    const minRequired = minAmount[serviceId] || 1;
+
+    if (amount >= minRequired) {
+      userState[ctx.from.id].amount = amount;
+      userState[ctx.from.id].stage = 'enter_link';
+      await ctx.reply(`You entered amount: ${userText}. Please provide the link:`);
+    } else {
+      await ctx.reply(`⚠️ The minimum amount for this service is ${minRequired}. Please enter a valid amount.`);
+    }
+  } else if (user && user.stage === 'enter_link') {
+    userState[ctx.from.id].link = userText;
+    userState[ctx.from.id].stage = 'confirm_order';
+    await ctx.reply(`You provided the link: ${userText}. Confirm your order.`, {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: '✅ Confirm Order', callback_data: 'confirm_order' }]
+        ]
+      }
+    });
+  } else {
+    await ctx.reply('⚠️ Please follow the steps properly.');
+  }
+});
+
+// Confirm order logic
+bot.action('confirm_order', async (ctx) => {
+  const user = userState[ctx.from.id];
+  if (user && user.stage === 'confirm_order') {
+    try {
+      await ctx.reply('🚀 Processing your order...');
+      const response = await axios.post(`${apiBaseURL}?action=add&service=${user.service}&link=${encodeURIComponent(user.link)}&quantity=${user.amount}&key=${apiKey}`);
+      
+      if (response.data.order) {
+        await ctx.reply('✅ Your order has been placed successfully!');
+      } else {
+        await ctx.reply('❌ Failed to place the order. Please try again.');
+      }
+
+      userState[ctx.from.id] = null; // Reset the user state after order is placed
+    } catch (err) {
+      console.error(err);
+      await ctx.reply('❌ Failed to place the order. Please try again.');
+    }
+  }
+});
+
+// Support button logic
+bot.hears('📞 Support', (ctx) => {
+  userState[ctx.from.id] = null; // Cancel any ongoing flow
+  ctx.reply('How can we assist you? Please choose one of the following options:', {
     reply_markup: {
       inline_keyboard: [
-        [{ text: '📱 Contact via WhatsApp', url: 'https://wa.me/+255747437093' }],
-        [{ text: '📞 Call Us', url: 'tel:+255747437093' }],
+        [{ text: '📱 Contact via WhatsApp', url: 'https://wa.me/+123456789' }],
+        [{ text: '📞 Call Us', url: 'tel:+123456789' }],
       ]
     }
   });
 });
 
+// Wallet button logic
 bot.hears('💰 Wallet', async (ctx) => {
-  await resetUserState(ctx);
+  userState[ctx.from.id] = null; // Cancel any ongoing flow
   try {
     const { data: wallet } = await axios.get(`${apiBaseURL}?action=balance&key=${apiKey}`);
     await ctx.reply(`💵 Your current wallet balance is: ${wallet.balance}$`);
@@ -112,9 +194,10 @@ bot.hears('💰 Wallet', async (ctx) => {
   }
 });
 
-bot.hears('❓ FAQ', async (ctx) => {
-  await resetUserState(ctx);
-  await ctx.reply(
+// FAQ button logic
+bot.hears('❓ FAQ', (ctx) => {
+  userState[ctx.from.id] = null; // Cancel any ongoing flow
+  ctx.reply(
     'Frequently Asked Questions (FAQ):\n' +
     '1️⃣ How to create an order?\n' +
     '2️⃣ How to check my order status?\n' +
@@ -131,131 +214,23 @@ bot.hears('❓ FAQ', async (ctx) => {
   );
 });
 
-bot.hears('📋 Order Status', async (ctx) => {
-  await resetUserState(ctx);
-  await ctx.reply('Please enter your order ID:');
-  userState[ctx.from.id] = { stage: 'order_status' };
+bot.action('faq_details', (ctx) => {
+  ctx.reply(
+    '1️⃣ To create an order, select "🆕 New Order" from the main menu, then follow the steps.\n' +
+    '2️⃣ To check your order status, go to "📞 Support" and choose "Check Order Status" or visit our website.\n' +
+    '3️⃣ We accept various payment methods including credit cards, PayPal, and cryptocurrencies.\n' +
+    '4️⃣ Delivery time depends on the service you order. Most orders are completed within 24-48 hours.\n' +
+    '5️⃣ If you encounter any issues, please contact our support team via "📞 Support" for assistance.'
+  );
 });
 
-bot.hears('👮 ADMIN', async (ctx) => {
-  if (ctx.from.id == '5357517490') {
-    await resetUserState(ctx);
-    await ctx.reply('Admin Panel:', {
-      reply_markup: {
-        inline_keyboard: [
-          [{ text: '📋 GET ALL BOT USERS LIST', callback_data: 'admin_get_users' }],
-          [{ text: '💰 ADD BALANCE TO USER WALLET', callback_data: 'admin_add_balance' }],
-          [{ text: '🚫 BLOCK USER FROM BOT', callback_data: 'admin_block_user' }]
-        ]
-      }
-    });
-  } else {
-    await ctx.reply('🚫 You do not have permission to access this option.');
-  }
+// Start the bot
+bot.launch().then(() => {
+  console.log('Bot has been launched successfully.');
+}).catch((err) => {
+  console.error('Failed to launch bot:', err);
 });
 
-bot.action('admin_get_users', async (ctx) => {
-  // Logic to get the list of all bot users by usernames
-});
-
-bot.action('admin_add_balance', async (ctx) => {
-  // Logic to add balance to a user's wallet
-});
-
-bot.action('admin_block_user', async (ctx) => {
-  await ctx.reply('Please enter the username of the user to block:');
-  userState[ctx.from.id] = { stage: 'admin_block_user' };
-});
-
-bot.hears('🆕 New Order', async (ctx) => {
-  await resetUserState(ctx);
-  await ctx.reply('Please select a service:', {
-    reply_markup: {
-      inline_keyboard: Object.keys(serviceMinimumAmounts).map(serviceId => 
-        [{ text: `Service ${serviceId}`, callback_data: `service_${serviceId}` }]
-      )
-    }
-  });
-});
-
-bot.action(/service_\d+/, async (ctx) => {
-  const serviceId = ctx.match[0].replace('service_', '');
-  userState[ctx.from.id] = { stage: 'confirm_order', service: serviceId };
-  await ctx.reply(`You have selected service ID ${serviceId}. Please enter the amount:`);
-});
-
-bot.on('text', async (ctx) => {
-  const user = userState[ctx.from.id];
-  const userText = ctx.message.text;
-
-  if (user && user.stage === 'order_status' && /^\d+$/.test(userText)) {
-    try {
-      const { data: orderStatus } = await axios.get(`${apiBaseURL}?action=status&order=${userText}&key=${apiKey}`);
-      await ctx.reply(
-        `📋 Order ID: ${userText}\n` +
-        `💵 Charge: ${orderStatus.charge}$\n` +
-        `🔢 Start Count: ${orderStatus.start_count}\n` +
-        `🚦 Status: ${orderStatus.status}\n` +
-        `📉 Remains: ${orderStatus.remains}\n` +
-        `💱 Currency: ${orderStatus.currency}`
-      );
-    } catch (err) {
-      console.error(err);
-      await ctx.reply('❌ Failed to retrieve order status. Please check your Order ID and try again.');
-    }
-  } else if (user && user.stage === 'admin_block_user') {
-    const username = ctx.message.text;
-    try {
-      await axios.post(`${apiBaseURL}?action=block_user&username=${encodeURIComponent(username)}&key=${apiKey}`);
-      await ctx.reply(`🚫 User ${username} has been blocked.`);
-    } catch (err) {
-      console.error(err);
-      await ctx.reply('❌ Failed to block the user. Please try again.');
-    }
-    userState[ctx.from.id] = null;
-  } else if (user && user.stage === 'confirm_order') {
-    if (/^\d+$/.test(userText)) {
-      const minAmount = serviceMinimumAmounts[user.service];
-      if (parseInt(userText, 10) < minAmount) {
-        await ctx.reply(`❌ The minimum amount for service ID ${user.service} is ${minAmount}. Please enter a higher amount.`);
-        return;
-      }
-      user.amount = parseInt(userText, 10);
-      await ctx.reply('Please provide the link for your order:');
-      userState[ctx.from.id].stage = 'provide_link';
-    } else if (user && user.stage === 'provide_link') {
-      user.link = userText;
-      await ctx.reply('Please confirm your order by clicking the button below:', {
-        reply_markup: {
-          inline_keyboard: [
-            [{ text: 'Confirm Order', callback_data: 'confirm_order' }]
-          ]
-        }
-      });
-    } else {
-      await ctx.reply('⚠️ Please follow the steps properly.');
-    }
-  }
-});
-
-bot.action('confirm_order', async (ctx) => {
-  const user = userState[ctx.from.id];
-  if (user && user.stage === 'confirm_order') {
-    try {
-      const response = await axios.post(`${apiBaseURL}?action=add&service=${user.service}&link=${encodeURIComponent(user.link)}&quantity=${user.amount}&key=${apiKey}`);
-      
-      if (response.data.order) {
-        await ctx.reply(`✅ Your order has been placed successfully!\nOrder ID: ${response.data.order}`);
-      } else {
-        await ctx.reply('❌ Failed to place the order. Please try again.');
-      }
-
-      userState[ctx.from.id] = null; // Reset the user state after order is placed
-    } catch (err) {
-      console.error(err);
-      await ctx.reply('❌ Failed to place the order. Please try again.');
-    }
-  }
-});
-
-bot.launch();
+// Graceful stop
+process.once('SIGINT', () => bot.stop('SIGINT'));
+process.once('SIGTERM', () => bot.stop('SIGTERM'));

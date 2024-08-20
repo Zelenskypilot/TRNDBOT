@@ -22,59 +22,28 @@ app.listen(PORT, () => {
 // Track conversation state
 let userState = {};
 
-bot.start(async (ctx) => {
-  userState[ctx.from.id] = { stage: 'start' }; // Reset user state on start
-  try {
-    await ctx.reply(
-      '🎉 Welcome to the Trendifysmm SMM Panel Bot! To use this bot, you must first join our channel.',
-      {
-        reply_markup: {
-          inline_keyboard: [
-            [
-              {
-                text: 'Join our channel',
-                url: 'https://t.me/trendifysmmtelebot'
-              },
-            ],
-            [
-              {
-                text: 'Confirm join',
-                callback_data: 'confirm_join'
-              }
-            ]
-          ]
-        }
-      }
-    );
-  } catch (err) {
-    console.error(err);
-  }
-});
-
-bot.action('confirm_join', async (ctx) => {
-  try {
-    const chatMember = await bot.telegram.getChatMember('@trendifysmmtelebot', ctx.from.id);
-    if (chatMember.status === 'member' || chatMember.status === 'administrator' || chatMember.status === 'creator') {
-      await ctx.reply('Thank you for joining our channel! How can I assist you today?', {
-        reply_markup: {
-          keyboard: [
-            ['🆕 New Order', '💰 Wallet'],
-            ['❓ FAQ', '📞 Support'],
-          ],
-          resize_keyboard: true,
-          one_time_keyboard: true,
-        }
-      });
-    } else {
-      await ctx.reply('🚫 You must join our channel to use this bot.');
+// Start command and custom keyboard with the ADMIN button for the admin user
+bot.start((ctx) => {
+  const keyboard = {
+    reply_markup: {
+      keyboard: [
+        [{ text: '🆕 New Order' }, { text: '💰 Wallet' }],
+        [{ text: '📞 Support' }, { text: '❓ FAQ' }],
+      ],
+      resize_keyboard: true,
+      one_time_keyboard: true,
     }
-  } catch (err) {
-    console.error(err);
-    await ctx.reply('❌ There was an error while checking your subscription status.');
+  };
+
+  // Add the ADMIN button if the user is the admin
+  if (ctx.from.id === 5357517490) { // Replace with your admin's Telegram ID
+    keyboard.reply_markup.keyboard.push([{ text: 'ADMIN' }]);
   }
+
+  ctx.reply('🎉 Welcome to the Trendifysmm Marketing Agency Admin Bot! I can help manage www.trendifysmm.com website.', keyboard);
 });
 
-// New Order command
+// Handle the "New Order" button
 bot.hears('🆕 New Order', async (ctx) => {
   userState[ctx.from.id] = { stage: 'select_service' }; // Set user state to selecting service
 
@@ -100,7 +69,7 @@ bot.hears('🆕 New Order', async (ctx) => {
   }
 });
 
-// Capture user's service selection by number
+// Handle user input after selecting a service
 bot.on('text', async (ctx) => {
   const userText = ctx.message.text;
   const user = userState[ctx.from.id];
@@ -123,7 +92,7 @@ bot.on('text', async (ctx) => {
   } else if (user && user.stage === 'enter_amount' && /^\d+$/.test(userText)) {
     const amount = parseInt(userText, 10);
     const serviceId = user.service;
-    const minRequired = minAmount[serviceId] || 1;
+    const minRequired = 1; // Set minimum required amount here
 
     if (amount >= minRequired) {
       userState[ctx.from.id].amount = amount;
@@ -169,20 +138,20 @@ bot.action('confirm_order', async (ctx) => {
   }
 });
 
-// Support button logic
+// Handle the "Support" button
 bot.hears('📞 Support', (ctx) => {
   userState[ctx.from.id] = null; // Cancel any ongoing flow
   ctx.reply('How can we assist you? Please choose one of the following options:', {
     reply_markup: {
       inline_keyboard: [
-        [{ text: '📱 Contact via WhatsApp', url: 'https://wa.me/+123456789' }],
-        [{ text: '📞 Call Us', url: 'tel:+123456789' }],
+        [{ text: '📱 Contact via WhatsApp', url: 'https://wa.me/message/OV5BS7MPRIMRO1' }],
+        [{ text: '📞 Call Us', url: 'tel:+255747437093' }],
       ]
     }
   });
 });
 
-// Wallet button logic
+// Handle the "Wallet" button
 bot.hears('💰 Wallet', async (ctx) => {
   userState[ctx.from.id] = null; // Cancel any ongoing flow
   try {
@@ -194,7 +163,7 @@ bot.hears('💰 Wallet', async (ctx) => {
   }
 });
 
-// FAQ button logic
+// Handle the "FAQ" button
 bot.hears('❓ FAQ', (ctx) => {
   userState[ctx.from.id] = null; // Cancel any ongoing flow
   ctx.reply(
@@ -214,6 +183,7 @@ bot.hears('❓ FAQ', (ctx) => {
   );
 });
 
+// Detailed FAQ information
 bot.action('faq_details', (ctx) => {
   ctx.reply(
     '1️⃣ To create an order, select "🆕 New Order" from the main menu, then follow the steps.\n' +
@@ -224,13 +194,102 @@ bot.action('faq_details', (ctx) => {
   );
 });
 
-// Start the bot
-bot.launch().then(() => {
-  console.log('Bot has been launched successfully.');
-}).catch((err) => {
-  console.error('Failed to launch bot:', err);
+// Handle the "ADMIN" button (for admin user)
+bot.hears('ADMIN', (ctx) => {
+  if (ctx.from.id === 5357517490) { // Admin only
+    ctx.reply('🛠️ Admin Panel:', {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: 'GET ALL BOT USERS LIST', callback_data: 'get_users' }],
+          [{ text: 'ADD BALANCE TO USER WALLET', callback_data: 'add_balance' }],
+          [{ text: 'BLOCK USER FROM BOT', callback_data: 'block_user' }],
+        ]
+      }
+    });
+  } else {
+    ctx.reply('⚠️ You are not authorized to access the Admin Panel.');
+  }
 });
 
-// Graceful stop
-process.once('SIGINT', () => bot.stop('SIGINT'));
-process.once('SIGTERM', () => bot.stop('SIGTERM'));
+// Handle the "GET ALL BOT USERS LIST" action
+bot.action('get_users', async (ctx) => {
+  if (ctx.from.id === 5357517490) {
+    try {
+      const users = Object.keys(userState).map((userId) => userId); // Fetching usernames
+
+      if (users.length > 0) {
+        await ctx.reply(`👥 All Bot Users:\n${users.join('\n')}`);
+      } else {
+        await ctx.reply('📂 No users found.');
+      }
+    } catch (err) {
+      console.error(err);
+      await ctx.reply('❌ Failed to retrieve users.');
+    }
+  } else {
+    ctx.reply('⚠️ You are not authorized to perform this action.');
+  }
+});
+
+// Handle the "ADD BALANCE TO USER WALLET" action
+bot.action('add_balance', async (ctx) => {
+  if (ctx.from.id === 5357517490) {
+    userState[ctx.from.id] = { stage: 'add_balance' }; // Setting admin state
+    await ctx.reply('💵 Please enter the username and amount to add in the format: `username:amount`.');
+  } else {
+    ctx.reply('⚠️ You are not authorized to perform this action.');
+  }
+});
+
+// Handle balance addition text input
+bot.on('text', async (ctx) => {
+  const admin = userState[ctx.from.id];
+
+  if (admin && admin.stage === 'add_balance') {
+    const input = ctx.message.text;
+    const [username, amount] = input.split(':');
+    
+    if (username && amount && !isNaN(amount)) {
+      try {
+        // Implement logic to add balance to the user's wallet
+        await ctx.reply(`✅ Successfully added ${amount}$ to ${username}'s wallet.`);
+        userState[ctx.from.id] = null; // Reset admin state
+      } catch (err) {
+        console.error(err);
+        await ctx.reply('❌ Failed to add balance.');
+      }
+    } else {
+      await ctx.reply('⚠️ Invalid format. Please use the format `username:amount`.');
+    }
+  }
+});
+
+// Handle the "BLOCK USER FROM BOT" action
+bot.action('block_user', async (ctx) => {
+  if (ctx.from.id === 5357517490) {
+    userState[ctx.from.id] = { stage: 'block_user' }; // Setting admin state
+    await ctx.reply('🚫 Please enter the username you want to block.');
+  } else {
+    ctx.reply('⚠️ You are not authorized to perform this action.');
+  }
+});
+
+// Handle blocking a user
+bot.on('text', async (ctx) => {
+  const admin = userState[ctx.from.id];
+
+  if (admin && admin.stage === 'block_user') {
+    const username = ctx.message.text;
+    
+    try {
+      // Implement logic to block the user from the bot
+      await ctx.reply(`🚫 Successfully blocked ${username} from the bot.`);
+      userState[ctx.from.id] = null; // Reset admin state
+    } catch (err) {
+      console.error(err);
+      await ctx.reply('❌ Failed to block user.');
+    }
+  }
+});
+
+bot.launch();

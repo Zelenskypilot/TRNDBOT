@@ -196,13 +196,17 @@ bot.action('faq_details', (ctx) => {
 // Handle the "ADMIN" button (for admin user)
 bot.hears('ADMIN', (ctx) => {
   if (ctx.from.id === 5357517490) { // Admin only
-    ctx.reply('🛠️ Admin Panel:', {
+ctx.reply('🛠️ Admin Panel:', {
       reply_markup: {
         inline_keyboard: [
-          [{ text: 'GET ALL BOT USERS LIST', callback_data: 'get} catch (err) {
-      console.error(err);
-      await ctx.reply('❌ Failed to block the user.');
-    }
+          [{ text: 'GET ALL BOT USERS LIST', callback_data: 'get_users' }],
+          [{ text: 'ADD BALANCE TO USER WALLET', callback_data: 'add_balance' }],
+          [{ text: 'BLOCK USER FROM BOT', callback_data: 'block_user' }],
+        ]
+      }
+    });
+  } else {
+    ctx.reply('⚠️ You are not authorized to access the Admin Panel.');
   }
 });
 

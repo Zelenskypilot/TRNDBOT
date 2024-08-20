@@ -19,9 +19,6 @@ app.listen(PORT, () => {
   console.log(`HTTPS server is running on port ${PORT}`);
 });
 
-// Track conversation state
-let userState = {};
-
 // Start command and custom keyboard with the ADMIN button for the admin user
 bot.start((ctx) => {
   const keyboard = {
@@ -45,8 +42,6 @@ bot.start((ctx) => {
 
 // Handle the "New Order" button
 bot.hears('🆕 New Order', async (ctx) => {
-  userState[ctx.from.id] = { stage: 'select_service' }; // Set user state to selecting service
-
   try {
     // Get the list of all services from the API
     const { data: services } = await axios.get(`${apiBaseURL}?action=services&key=${apiKey}`);
@@ -72,71 +67,29 @@ bot.hears('🆕 New Order', async (ctx) => {
 // Handle user input after selecting a service
 bot.on('text', async (ctx) => {
   const userText = ctx.message.text;
-  const user = userState[ctx.from.id];
+  const serviceIDs = [
+    6443, 7128, 5333, 6449, 6828, 6827, 5457, 5458, 5459, 6784,
+    6785, 6786, 5639, 5634, 5635, 5637, 5612, 5611, 5610, 7215,
+    6793, 7221, 6159, 6160, 6153
+  ];
 
-  if (user && user.stage === 'select_service' && /^\d+$/.test(userText)) {
+  if (/^\d+$/.test(userText)) {
     const serviceIndex = parseInt(userText, 10) - 1;
-    const serviceIDs = [
-      6443, 7128, 5333, 6449, 6828, 6827, 5457, 5458, 5459, 6784,
-      6785, 6786, 5639, 5634, 5635, 5637, 5612, 5611, 5610, 7215,
-      6793, 7221, 6159, 6160, 6153
-    ];
 
     if (serviceIndex >= 0 && serviceIndex < serviceIDs.length) {
-      userState[ctx.from.id].service = serviceIDs[serviceIndex];
-      userState[ctx.from.id].stage = 'enter_amount';
-      await ctx.reply(`You selected service #${userText}.\nPlease enter the amount:`);
+      const selectedServiceId = serviceIDs[serviceIndex];
+      await ctx.reply(`You selected service #${userText}. Please enter the amount:`);
     } else {
       await ctx.reply('⚠️ Please enter a valid service number.');
     }
-  } else if (user && user.stage === 'enter_amount' && /^\d+$/.test(userText)) {
+  } else if (/^\d+$/.test(userText)) {
     const amount = parseInt(userText, 10);
-    const serviceId = user.service;
     const minRequired = 1; // Set minimum required amount here
 
     if (amount >= minRequired) {
-      userState[ctx.from.id].amount = amount;
-      userState[ctx.from.id].stage = 'enter_link';
       await ctx.reply(`You entered amount: ${userText}. Please provide the link:`);
     } else {
       await ctx.reply(`⚠️ The minimum amount for this service is ${minRequired}. Please enter a valid amount.`);
-    }
-  } else if (user && user.stage === 'enter_link') {
-    userState[ctx.from.id].link = userText;
-    userState[ctx.from.id].stage = 'confirm_order';
-    await ctx.reply(`You provided the link: ${userText}. Confirm your order.`, {
-      reply_markup: {
-        inline_keyboard: [
-          [{ text: '✅ Confirm Order', callback_data: 'confirm_order' }]
-        ]
-      }
-    });
-  } else if (user && user.stage === 'add_balance') {
-    const input = ctx.message.text;
-    const [username, amount] = input.split(':');
-    
-    if (username && amount && !isNaN(amount)) {
-      try {
-        // Implement logic to add balance to the user's wallet
-        await ctx.reply(`✅ Successfully added ${amount}$ to ${username}'s wallet.`);
-        userState[ctx.from.id] = null; // Reset admin state
-      } catch (err) {
-        console.error(err);
-        await ctx.reply('❌ Failed to add balance.');
-      }
-    } else {
-      await ctx.reply('⚠️ Invalid format. Please use the format `username:amount`.');
-    }
-  } else if (user && user.stage === 'block_user') {
-    const username = ctx.message.text;
-    
-    try {
-      // Implement logic to block the user from the bot
-      await ctx.reply(`🚫 Successfully blocked ${username} from the bot.`);
-      userState[ctx.from.id] = null; // Reset admin state
-    } catch (err) {
-      console.error(err);
-      await ctx.reply('❌ Failed to block the user.');
     }
   } else {
     await ctx.reply('⚠️ Please follow the steps properly.');
@@ -145,29 +98,23 @@ bot.on('text', async (ctx) => {
 
 // Confirm order logic
 bot.action('confirm_order', async (ctx) => {
-  const user = userState[ctx.from.id];
-  if (user && user.stage === 'confirm_order') {
-    try {
-      await ctx.reply('🚀 Processing your order...');
-      const response = await axios.post(`${apiBaseURL}?action=add&service=${user.service}&link=${encodeURIComponent(user.link)}&quantity=${user.amount}&key=${apiKey}`);
-      
-      if (response.data.order) {
-        await ctx.reply('✅ Your order has been placed successfully!');
-      } else {
-        await ctx.reply('❌ Failed to place the order. Please try again.');
-      }
-
-      userState[ctx.from.id] = null; // Reset the user state after order is placed
-    } catch (err) {
-      console.error(err);
+  try {
+    await ctx.reply('🚀 Processing your order...');
+    const response = await axios.post(`${apiBaseURL}?action=add&service=${selectedServiceId}&link=${encodeURIComponent(link)}&quantity=${amount}&key=${apiKey}`);
+    
+    if (response.data.order) {
+      await ctx.reply('✅ Your order has been placed successfully!');
+    } else {
       await ctx.reply('❌ Failed to place the order. Please try again.');
     }
+  } catch (err) {
+    console.error(err);
+    await ctx.reply('❌ Failed to place the order. Please try again.');
   }
 });
 
 // Handle the "Support" button
 bot.hears('📞 Support', (ctx) => {
-  userState[ctx.from.id] = null; // Cancel any ongoing flow
   ctx.reply('How can we assist you? Please choose one of the following options:', {
     reply_markup: {
       inline_keyboard: [
@@ -180,7 +127,6 @@ bot.hears('📞 Support', (ctx) => {
 
 // Handle the "Wallet" button
 bot.hears('💰 Wallet', async (ctx) => {
-  userState[ctx.from.id] = null; // Cancel any ongoing flow
   try {
     const { data: wallet } = await axios.get(`${apiBaseURL}?action=balance&key=${apiKey}`);
     await ctx.reply(`💵 Your current wallet balance is: ${wallet.balance}$`);
@@ -192,7 +138,6 @@ bot.hears('💰 Wallet', async (ctx) => {
 
 // Handle the "FAQ" button
 bot.hears('❓ FAQ', (ctx) => {
-  userState[ctx.from.id] = null; // Cancel any ongoing flow
   ctx.reply(
     'Frequently Asked Questions (FAQ):\n' +
     '1️⃣ How to create an order?\n' +
@@ -248,11 +193,10 @@ bot.hears('ADMIN', (ctx) => {
 bot.action('get_users_list', async (ctx) => {
   if (ctx.from.id === 5357517490) { // Admin check
     try {
-      // Fetch users list (this requires implementation based on your backend)
-      const users = await getAllUsers(); // Define this function according to your database
-      const userNames = users.map(user => user.username).join('\n');
-
-      await ctx.reply(`👥 List of all bot users:\n${userNames}`);
+      // Fetch the list of users from the database or API
+      const users = await getAllUsers(); // Implement getAllUsers function
+      const userList = users.map(user => `@${user.username}`).join('\n');
+      await ctx.reply(`👥 List of all bot users:\n\n${userList}`);
     } catch (err) {
       console.error(err);
       await ctx.reply('❌ Failed to retrieve the users list.');
@@ -263,7 +207,7 @@ bot.action('get_users_list', async (ctx) => {
 // Handle "ADD BALANCE TO USER WALLET" callback
 bot.action('add_balance', (ctx) => {
   if (ctx.from.id === 5357517490) { // Admin check
-    ctx.reply('📝 Please enter the username and the amount in the format: `username:amount`');
+    ctx.reply('💵 Please enter the username of the user you want to add balance to.');
     userState[ctx.from.id] = { stage: 'add_balance' }; // Set the state for adding balance
   }
 });
@@ -271,28 +215,74 @@ bot.action('add_balance', (ctx) => {
 // Handle "BLOCK USER FROM BOT" callback
 bot.action('block_user', (ctx) => {
   if (ctx.from.id === 5357517490) { // Admin check
-    ctx.reply('🚫 Please enter the username of the user to block:');
-    userState[ctx.from.id] = { stage: 'block_user' }; // Set the state for blocking a user
+    ctx.reply('🚫 Please enter the username of the user you want to block.');
+    userState[ctx.from.id] = { stage: 'block_user' }; // Set the state for blocking user
   }
 });
 
-// Launch the bot
-bot.launch().then(() => {
-  console.log('Bot started successfully');
-}).catch(err => {
-  console.error('Failed to start the bot:', err);
-});
-
-// Graceful stop
-process.once('SIGINT', () => bot.stop('SIGINT'));
-process.once('SIGTERM', () => bot.stop('SIGTERM'));
-
-// Dummy function to simulate getting all users (replace this with your database logic)
+// Function to get all users (you need to implement this according to your backend/database)
 async function getAllUsers() {
+  // Implement the logic to retrieve all bot users from your database
+  // This is a placeholder example
   return [
     { username: 'user1' },
     { username: 'user2' },
-    { username: 'user3' }
-    // Add more users as needed
+    // Add more users here
   ];
-           }
+}
+
+// Handle user input after selecting an admin action
+bot.on('text', async (ctx) => {
+  const adminId = 5357517490; // Replace with your admin's Telegram ID
+  const userInput = ctx.message.text;
+
+  if (userState[ctx.from.id]?.stage === 'add_balance') {
+    // Add balance to the user
+    const [username, amount] = userInput.split(' ');
+    if (username && amount) {
+      try {
+        // Implement the logic to add balance to the user's wallet
+        await addBalanceToUser(username, amount); // Placeholder function
+        await ctx.reply(`✅ Added ${amount}$ to @${username}'s wallet.`);
+      } catch (err) {
+        console.error(err);
+        await ctx.reply('❌ Failed to add balance.');
+      }
+    } else {
+      await ctx.reply('⚠️ Please enter the username and the amount separated by a space.');
+    }
+    delete userState[ctx.from.id]; // Clear the state
+  } else if (userState[ctx.from.id]?.stage === 'block_user') {
+    // Block the user
+    const username = userInput;
+    if (username) {
+      try {
+        // Implement the logic to block the user
+        await blockUser(username); // Placeholder function
+        await ctx.reply(`🚫 Blocked @${username} from using the bot.`);
+      } catch (err) {
+        console.error(err);
+        await ctx.reply('❌ Failed to block the user.');
+      }
+    } else {
+      await ctx.reply('⚠️ Please enter a valid username.');
+    }
+    delete userState[ctx.from.id]; // Clear the state
+  }
+});
+
+// Placeholder functions for adding balance and blocking a user
+async function addBalanceToUser(username, amount) {
+  // Implement your logic to add balance to the user's wallet in your database or API
+}
+
+async function blockUser(username) {
+  // Implement your logic to block the user in your database or API
+}
+
+// Launch the bot
+bot.launch();
+
+// Enable graceful stop
+process.once('SIGINT', () => bot.stop('SIGINT'));
+process.once('SIGTERM', () => bot.stop('SIGTERM'));

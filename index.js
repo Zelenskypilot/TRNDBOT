@@ -1,4 +1,3 @@
-require('dotenv').config();
 const express = require('express');
 const { Telegraf } = require('telegraf');
 const axios = require('axios');
@@ -200,96 +199,16 @@ bot.hears('ADMIN', (ctx) => {
     ctx.reply('🛠️ Admin Panel:', {
       reply_markup: {
         inline_keyboard: [
-          [{ text: 'GET ALL BOT USERS LIST', callback_data: 'get_users' }],
-          [{ text: 'ADD BALANCE TO USER WALLET', callback_data: 'add_balance' }],
-          [{ text: 'BLOCK USER FROM BOT', callback_data: 'block_user' }],
-        ]
-      }
-    });
-  } else {
-    ctx.reply('⚠️ You are not authorized to access the Admin Panel.');
-  }
-});
-
-// Handle the "GET ALL BOT USERS LIST" action
-bot.action('get_users', async (ctx) => {
-  if (ctx.from.id === 5357517490) {
-    try {
-      const users = Object.keys(userState).map((userId) => userId); // Fetching usernames
-
-      if (users.length > 0) {
-        await ctx.reply(`👥 All Bot Users:\n${users.join('\n')}`);
-      } else {
-        await ctx.reply('📂 No users found.');
-      }
-    } catch (err) {
+          [{ text: 'GET ALL BOT USERS LIST', callback_data: 'get} catch (err) {
       console.error(err);
-      await ctx.reply('❌ Failed to retrieve users.');
-    }
-  } else {
-    ctx.reply('⚠️ You are not authorized to perform this action.');
-  }
-});
-
-// Handle the "ADD BALANCE TO USER WALLET" action
-bot.action('add_balance', async (ctx) => {
-  if (ctx.from.id === 5357517490) {
-    userState[ctx.from.id] = { stage: 'add_balance' }; // Setting admin state
-    await ctx.reply('💵 Please enter the username and amount to add in the format: `username:amount`.');
-  } else {
-    ctx.reply('⚠️ You are not authorized to perform this action.');
-  }
-});
-
-// Handle balance addition text input
-bot.on('text', async (ctx) => {
-  const admin = userState[ctx.from.id];
-
-  if (admin && admin.stage === 'add_balance') {
-    const input = ctx.message.text;
-    const [username, amount] = input.split(':');
-    
-    if (username && amount && !isNaN(amount)) {
-      try {
-        // Implement logic to add balance to the user's wallet
-        await ctx.reply(`✅ Successfully added ${amount}$ to ${username}'s wallet.`);
-        userState[ctx.from.id] = null; // Reset admin state
-      } catch (err) {
-        console.error(err);
-        await ctx.reply('❌ Failed to add balance.');
-      }
-    } else {
-      await ctx.reply('⚠️ Invalid format. Please use the format `username:amount`.');
+      await ctx.reply('❌ Failed to block the user.');
     }
   }
 });
 
-// Handle the "BLOCK USER FROM BOT" action
-bot.action('block_user', async (ctx) => {
-  if (ctx.from.id === 5357517490) {
-    userState[ctx.from.id] = { stage: 'block_user' }; // Setting admin state
-    await ctx.reply('🚫 Please enter the username you want to block.');
-  } else {
-    ctx.reply('⚠️ You are not authorized to perform this action.');
-  }
-});
-
-// Handle blocking a user
-bot.on('text', async (ctx) => {
-  const admin = userState[ctx.from.id];
-
-  if (admin && admin.stage === 'block_user') {
-    const username = ctx.message.text;
-    
-    try {
-      // Implement logic to block the user from the bot
-      await ctx.reply(`🚫 Successfully blocked ${username} from the bot.`);
-      userState[ctx.from.id] = null; // Reset admin state
-    } catch (err) {
-      console.error(err);
-      await ctx.reply('❌ Failed to block user.');
-    }
-  }
-});
-
+// Launch the bot
 bot.launch();
+
+// Enable graceful stop
+process.once('SIGINT', () => bot.stop('SIGINT'));
+process.once('SIGTERM', () => bot.stop('SIGTERM'));

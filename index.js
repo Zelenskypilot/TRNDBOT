@@ -1,6 +1,6 @@
 require('dotenv').config();
 const express = require('express');
-const { Telegraf } = require('telegraf');
+const { Telegraf, session } = require('telegraf'); // Added session middleware
 const axios = require('axios');
 
 const app = express();
@@ -18,6 +18,9 @@ app.get('/', (req, res) => {
 app.listen(PORT, () => {
   console.log(`HTTPS server is running on port ${PORT}`);
 });
+
+// Middleware to enable session management
+bot.use(session());
 
 // Start command and custom keyboard with new buttons
 bot.start((ctx) => {
@@ -47,7 +50,7 @@ bot.start((ctx) => {
 
 // Handle subscription verification
 bot.action('verify_subscription', (ctx) => {
-  // You would need to implement a subscription verification mechanism here
+  // Implement subscription verification mechanism here
   const isSubscribed = true; // Placeholder for subscription status
 
   if (isSubscribed) {
@@ -65,7 +68,6 @@ bot.hears('🆕 New Order', async (ctx) => {
     
     // Filter services by the predefined IDs
     const serviceIDs = [7469, 7525, 7521, 7518];
-
     const serviceDetails = services.filter(s => serviceIDs.includes(s.service));
     const serviceInfo = serviceDetails.map((s, index) =>
       `${index + 1}. 📦 Service: ${s.name}\n🗄️ Category: ${s.category}\n💵 Price: ${s.rate}$ per 1000\n`).join('\n');

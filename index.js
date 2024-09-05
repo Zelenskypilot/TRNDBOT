@@ -1,6 +1,6 @@
 require('dotenv').config();
 const express = require('express');
-const { Telegraf, session } = require('telegraf'); // Added session middleware
+const { Telegraf, session } = require('telegraf'); 
 const axios = require('axios');
 
 const app = express();
@@ -22,7 +22,7 @@ app.listen(PORT, () => {
 // Middleware to enable session management
 bot.use(session());
 
-// Start command and custom keyboard with new buttons
+// Start command with custom keyboard
 bot.start((ctx) => {
   const keyboard = {
     reply_markup: {
@@ -31,26 +31,18 @@ bot.start((ctx) => {
         [{ text: '📞 Customer Care' }],
       ],
       resize_keyboard: true,
-      one_time_keyboard: true,
+      one_time_keyboard: false,
     }
   };
 
   const welcomeMessage = `🔥 Welcome to Trendifysmm bot! I can help grow your social media account easily.\n` +
     `Please subscribe to our channel for updates and then verify your subscription to use this bot.`;
 
-  ctx.reply(welcomeMessage, {
-    reply_markup: {
-      inline_keyboard: [
-        [{ text: '📢 Subscribe to Channel', url: 'https://t.me/trendifysmmtelebot' }],
-        [{ text: '✅ Verify Subscription', callback_data: 'verify_subscription' }]
-      ]
-    }
-  });
+  ctx.reply(welcomeMessage, keyboard); // Corrected keyboard implementation
 });
 
 // Handle subscription verification
 bot.action('verify_subscription', (ctx) => {
-  // Implement subscription verification mechanism here
   const isSubscribed = true; // Placeholder for subscription status
 
   if (isSubscribed) {
@@ -63,10 +55,8 @@ bot.action('verify_subscription', (ctx) => {
 // Handle the "New Order" button
 bot.hears('🆕 New Order', async (ctx) => {
   try {
-    // Get the list of all services from the API, filtering by specific service IDs
     const { data: services } = await axios.get(`${apiBaseURL}?action=services&key=${apiKey}`);
     
-    // Filter services by the predefined IDs
     const serviceIDs = [7469, 7525, 7521, 7518];
     const serviceDetails = services.filter(s => serviceIDs.includes(s.service));
     const serviceInfo = serviceDetails.map((s, index) =>
@@ -74,7 +64,6 @@ bot.hears('🆕 New Order', async (ctx) => {
 
     await ctx.reply(`🔥 Available Services:\n${serviceInfo}\n👇 Select the service by entering its number:`);
     
-    // Store the list of service IDs in session data
     ctx.session.serviceIDs = serviceIDs;
   } catch (err) {
     console.error(err);
@@ -92,14 +81,14 @@ bot.on('text', async (ctx) => {
 
     if (serviceIndex >= 0 && serviceIndex < serviceIDs.length) {
       const selectedServiceId = serviceIDs[serviceIndex];
-      ctx.session.selectedServiceId = selectedServiceId;  // Store the selected service ID
+      ctx.session.selectedServiceId = selectedServiceId;
       await ctx.reply(`You selected service #${userText}. Please enter the amount:`);
     } else if (ctx.session.selectedServiceId) {
       const amount = parseInt(userText, 10);
-      const minRequired = 1; // Set minimum required amount here
+      const minRequired = 1;
 
       if (amount >= minRequired) {
-        ctx.session.amount = amount; // Store the amount in session data
+        ctx.session.amount = amount;
         await ctx.reply(`You entered amount: ${userText}. Please provide the link:`);
       } else {
         await ctx.reply(`⚠️ The minimum amount for this service is ${minRequired}. Please enter a valid amount.`);
@@ -108,7 +97,7 @@ bot.on('text', async (ctx) => {
       await ctx.reply('⚠️ Please select a service first by entering its number.');
     }
   } else if (ctx.session.amount) {
-    ctx.session.link = userText; // Store the link in session data
+    ctx.session.link = userText;
     await ctx.reply('✅ Order details received. Confirming your order...', {
       reply_markup: {
         inline_keyboard: [

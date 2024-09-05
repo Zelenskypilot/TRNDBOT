@@ -1,6 +1,6 @@
 require('dotenv').config();
 const express = require('express');
-const { Telegraf, session } = require('telegraf'); 
+const { Telegraf, session } = require('telegraf');
 const axios = require('axios');
 
 const app = express();
@@ -22,7 +22,7 @@ app.listen(PORT, () => {
 // Middleware to enable session management
 bot.use(session());
 
-// Start command with custom keyboard
+// Start command and custom keyboard with new buttons
 bot.start((ctx) => {
   const keyboard = {
     reply_markup: {
@@ -38,7 +38,17 @@ bot.start((ctx) => {
   const welcomeMessage = `🔥 Welcome to Trendifysmm bot! I can help grow your social media account easily.\n` +
     `Please subscribe to our channel for updates and then verify your subscription to use this bot.`;
 
-  ctx.reply(welcomeMessage, keyboard); // Corrected keyboard implementation
+  ctx.reply(welcomeMessage, {
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: '📢 Subscribe to Channel', url: 'https://t.me/trendifysmmtelebot' }],
+        [{ text: '✅ Verify Subscription', callback_data: 'verify_subscription' }]
+      ]
+    }
+  });
+
+  // Display the custom keyboard after the welcome message
+  ctx.reply('Use the options below to start:', keyboard);
 });
 
 // Handle subscription verification
@@ -55,15 +65,19 @@ bot.action('verify_subscription', (ctx) => {
 // Handle the "New Order" button
 bot.hears('🆕 New Order', async (ctx) => {
   try {
+    // Get the list of all services from the API, filtering by specific service IDs
     const { data: services } = await axios.get(`${apiBaseURL}?action=services&key=${apiKey}`);
     
+    // Filter services by the predefined IDs
     const serviceIDs = [7469, 7525, 7521, 7518];
+
     const serviceDetails = services.filter(s => serviceIDs.includes(s.service));
     const serviceInfo = serviceDetails.map((s, index) =>
       `${index + 1}. 📦 Service: ${s.name}\n🗄️ Category: ${s.category}\n💵 Price: ${s.rate}$ per 1000\n`).join('\n');
 
     await ctx.reply(`🔥 Available Services:\n${serviceInfo}\n👇 Select the service by entering its number:`);
     
+    // Store the list of service IDs in session data
     ctx.session.serviceIDs = serviceIDs;
   } catch (err) {
     console.error(err);
@@ -81,14 +95,14 @@ bot.on('text', async (ctx) => {
 
     if (serviceIndex >= 0 && serviceIndex < serviceIDs.length) {
       const selectedServiceId = serviceIDs[serviceIndex];
-      ctx.session.selectedServiceId = selectedServiceId;
+      ctx.session.selectedServiceId = selectedServiceId;  // Store the selected service ID
       await ctx.reply(`You selected service #${userText}. Please enter the amount:`);
     } else if (ctx.session.selectedServiceId) {
       const amount = parseInt(userText, 10);
-      const minRequired = 1;
+      const minRequired = 1; // Set minimum required amount here
 
       if (amount >= minRequired) {
-        ctx.session.amount = amount;
+        ctx.session.amount = amount; // Store the amount in session data
         await ctx.reply(`You entered amount: ${userText}. Please provide the link:`);
       } else {
         await ctx.reply(`⚠️ The minimum amount for this service is ${minRequired}. Please enter a valid amount.`);
@@ -97,7 +111,7 @@ bot.on('text', async (ctx) => {
       await ctx.reply('⚠️ Please select a service first by entering its number.');
     }
   } else if (ctx.session.amount) {
-    ctx.session.link = userText;
+    ctx.session.link = userText; // Store the link in session data
     await ctx.reply('✅ Order details received. Confirming your order...', {
       reply_markup: {
         inline_keyboard: [

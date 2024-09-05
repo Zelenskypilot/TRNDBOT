@@ -2,12 +2,16 @@ require('dotenv').config();
 const express = require('express');
 const { Telegraf, session } = require('telegraf');
 const axios = require('axios');
+const NodeCache = require('node-cache');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const bot = new Telegraf(process.env.BOT_TOKEN);
 const apiKey = process.env.API_KEY;
 const apiBaseURL = 'https://trendifysmm.com/api/v2';
+
+// Cache setup with a default TTL (Time-to-Live) of 5 minutes
+const cache = new NodeCache({ stdTTL: 300 });
 
 // Basic Express route to keep the app alive
 app.get('/', (req, res) => {
@@ -22,8 +26,30 @@ app.listen(PORT, () => {
 // Middleware to enable session management
 bot.use(session());
 
+// Helper to make API requests with retries
+const fetchWithRetries = async (url, retries = 3, timeout = 5000) => {
+  for (let i = 0; i < retries; i++) {
+    try {
+      const response = await axios.get(url, { timeout });
+      return response.data;
+    } catch (error) {
+      if (i === retries - 1) throw error;
+    }
+  }
+};
+
+// Fetch and cache services data
+const getCachedServices = async () => {
+  if (cache.has('services')) {
+    return cache.get('services');
+  }
+  const services = await fetchWithRetries(`${apiBaseURL}?action=services&key=${apiKey}`);
+  cache.set('services', services);
+  return services;
+};
+
 // Start command and custom keyboard with new buttons
-bot.start((ctx) => {
+bot.start(async (ctx) => {
   const keyboard = {
     reply_markup: {
       keyboard: [
@@ -38,7 +64,7 @@ bot.start((ctx) => {
   const welcomeMessage = `🔥 Welcome to Trendifysmm bot! I can help grow your social media account easily.\n` +
     `Please subscribe to our channel for updates and then verify your subscription to use this bot.`;
 
-  ctx.reply(welcomeMessage, {
+  await ctx.reply(welcomeMessage, {
     reply_markup: {
       inline_keyboard: [
         [{ text: '📢 Subscribe to Channel', url: 'https://t.me/trendifysmmtelebot' }],
@@ -52,25 +78,25 @@ bot.start((ctx) => {
 });
 
 // Handle subscription verification
-bot.action('verify_subscription', (ctx) => {
+bot.action('verify_subscription', async (ctx) => {
+  ctx.replyWithChatAction('typing');
   const isSubscribed = true; // Placeholder for subscription status
 
   if (isSubscribed) {
-    ctx.reply('✅ You have successfully subscribed! You can now use the bot.');
+    await ctx.reply('✅ You have successfully subscribed! You can now use the bot.');
   } else {
-    ctx.reply('❌ You have not subscribed. Please subscribe to the channel and try again.');
+    await ctx.reply('❌ You have not subscribed. Please subscribe to the channel and try again.');
   }
 });
 
 // Handle the "New Order" button
 bot.hears('🆕 New Order', async (ctx) => {
+  ctx.replyWithChatAction('typing');
   try {
-    // Get the list of all services from the API, filtering by specific service IDs
-    const { data: services } = await axios.get(`${apiBaseURL}?action=services&key=${apiKey}`);
+    const services = await getCachedServices();
     
     // Filter services by the predefined IDs
     const serviceIDs = [7469, 7525, 7521, 7518];
-
     const serviceDetails = services.filter(s => serviceIDs.includes(s.service));
     const serviceInfo = serviceDetails.map((s, index) =>
       `${index + 1}. 📦 Service: ${s.name}\n🗄️ Category: ${s.category}\n💵 Price: ${s.rate}$ per 1000\n`).join('\n');
@@ -87,6 +113,7 @@ bot.hears('🆕 New Order', async (ctx) => {
 
 // Handle user input for ordering services
 bot.on('text', async (ctx) => {
+  ctx.replyWithChatAction('typing');
   const userText = ctx.message.text;
   const serviceIDs = ctx.session.serviceIDs || [];
 
@@ -127,8 +154,9 @@ bot.on('text', async (ctx) => {
 
 // Handle "Wallet" button
 bot.hears('💰 Wallet', async (ctx) => {
+  ctx.replyWithChatAction('typing');
   try {
-    const { data: wallet } = await axios.get(`${apiBaseURL}?action=balance&key=${apiKey}`);
+    const wallet = await fetchWithRetries(`${apiBaseURL}?action=balance&key=${apiKey}`);
     await ctx.reply(`💵 Your current wallet balance is: ${wallet.balance}$`);
   } catch (err) {
     console.error(err);
@@ -149,10 +177,9 @@ bot.hears('📞 Customer Care', (ctx) => {
 
 // Confirm order logic
 bot.action('confirm_order', async (ctx) => {
+  ctx.replyWithChatAction('typing');
   try {
-    await ctx.reply('🚀 Processing your order...');
     const { selectedServiceId, amount, link } = ctx.session;
-
     const response = await axios.post(`${apiBaseURL}?action=add&service=${selectedServiceId}&link=${encodeURIComponent(link)}&quantity=${amount}&key=${apiKey}`);
     
     if (response.data.order) {
